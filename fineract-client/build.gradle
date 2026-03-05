@@ -210,9 +210,9 @@ tasks.named('licenseMain') {
 }
 
 java {
-    // keep this at Java 8, not 17; see https://issues.apache.org/jira/browse/FINERACT-1214
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    // Updated to Java 21 as part of Java 8 to 21 migration; see https://issues.apache.org/jira/browse/FINERACT-1214
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 tasks.withType(JavaCompile).configureEach {
