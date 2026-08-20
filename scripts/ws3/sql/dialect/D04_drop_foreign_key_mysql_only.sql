@@ -1,0 +1,33 @@
+--
+-- Licensed to the Apache Software Foundation (ASF) under one
+-- or more contributor license agreements. See the NOTICE file
+-- distributed with this work for additional information
+-- regarding copyright ownership. The ASF licenses this file
+-- to you under the Apache License, Version 2.0 (the
+-- "License"); you may not use this file except in compliance
+-- with the License. You may obtain a copy of the License at
+--
+-- http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing,
+-- software distributed under the License is distributed on an
+-- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+-- KIND, either express or implied. See the License for the
+-- specific language governing permissions and limitations
+-- under the License.
+--
+-- name: D04_drop_foreign_key_mysql_only
+-- source: fineract-provider/src/main/java/org/apache/fineract/infrastructure/dataqueries/service/DatatableWriteServiceImpl.java:358-372,893 (as of 8c187f9d1)
+-- description: Reduced reproduction of the un-gated MySQL DDL emitted by the
+--   datatable writer when a datatable column carrying a code-value foreign key
+--   is dropped, or when a datatable is re-pointed at a different entity table.
+--   ALTER TABLE ... DROP FOREIGN KEY is MySQL/MariaDB syntax; PostgreSQL
+--   requires DROP CONSTRAINT. The same statements also use DROP KEY / ADD KEY /
+--   CHANGE COLUMN, none of which PostgreSQL accepts.
+-- expect: mysql=pass postgres=fail
+-- setup: CREATE TABLE ws3_d04_parent (id BIGINT NOT NULL, PRIMARY KEY (id))
+-- setup: CREATE TABLE ws3_d04_child (id BIGINT NOT NULL, parent_id BIGINT, PRIMARY KEY (id), CONSTRAINT fk_ws3_d04 FOREIGN KEY (parent_id) REFERENCES ws3_d04_parent (id))
+-- teardown: DROP TABLE ws3_d04_child
+-- teardown: DROP TABLE ws3_d04_parent
+--
+ALTER TABLE ws3_d04_child DROP FOREIGN KEY fk_ws3_d04
