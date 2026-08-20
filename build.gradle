@@ -228,7 +228,7 @@ allprojects  {
     spotless {
         format 'misc', {
             target '**/*.md', '**/*.properties', '**/.gitignore', '**/.openapi-generator-ignore', '**/*.yml', '**/*.xml', '**/**.json', '**/*.sql'
-            targetExclude '**/build/**', '**/bin/**', '**/.settings/**', '**/.idea/**', '**/.gradle/**', '**/gradlew.bat', '**/licenses/**', '**/banner.txt', '.vscode/**', '.profileconfig.json'
+            targetExclude '**/build/**', '**/bin/**', '**/.settings/**', '**/.idea/**', '**/.gradle/**', '**/.terraform/**', '**/gradlew.bat', '**/licenses/**', '**/banner.txt', '.vscode/**', '.profileconfig.json'
             indentWithSpaces(4)
             endWithNewline()
             trimTrailingWhitespace()
@@ -316,6 +316,9 @@ allprojects  {
             '**/NOTICE_SOURCE',
             // gradle
             '**/.gradle/**',
+            // Terraform provider cache and dependency lock files (generated, not committed)
+            '**/.terraform/**',
+            '**/.terraform.lock.hcl',
             '**/gradlew',
             '**/gradlew.bat',
             '**/gradle/wrapper/gradle-wrapper.properties',
