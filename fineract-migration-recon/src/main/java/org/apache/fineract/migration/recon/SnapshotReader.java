@@ -133,23 +133,27 @@ public final class SnapshotReader {
             throws SQLException {
         Map<String, Long> nextValues = new TreeMap<>();
         if (dialect == DatabaseDialect.POSTGRESQL) {
-            // pg_sequences reports the sequence's existence and start value; only the sequence relation itself carries
-            // is_called, which decides whether last_value has already been handed out
-            String catalogSql = "select start_value from pg_sequences where schemaname = ? and sequencename = ?";
+            // pg_get_serial_sequence resolves the owning sequence of an identity or serial column whatever it is named;
+            // only the sequence relation itself carries is_called, which decides whether last_value was handed out
+            String catalogSql = """
+                    select s.start_value, q.sequence
+                    from pg_get_serial_sequence(format('%I.%I', ?::text, ?::text), 'id') as q(sequence)
+                    join pg_sequences s on s.schemaname || '.' || s.sequencename = q.sequence
+                    """;
             for (String table : tables) {
-                String sequence = table + "_id_seq";
                 long startValue;
+                String qualified;
                 try (PreparedStatement statement = connection.prepareStatement(catalogSql)) {
                     statement.setString(1, schema);
-                    statement.setString(2, sequence);
+                    statement.setString(2, table);
                     try (ResultSet resultSet = statement.executeQuery()) {
                         if (!resultSet.next()) {
                             continue;
                         }
                         startValue = resultSet.getLong(1);
+                        qualified = resultSet.getString(2);
                     }
                 }
-                String qualified = dialect.quoteIdentifier(schema) + "." + dialect.quoteIdentifier(sequence);
                 try (Statement statement = connection.createStatement();
                         ResultSet resultSet = statement.executeQuery("select last_value, is_called from " + qualified)) {
                     if (resultSet.next()) {

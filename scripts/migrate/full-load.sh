@@ -76,6 +76,11 @@ EOF
     exit 0
 fi
 
+if [[ "${SOURCE_ENGINE}" != "mariadb" ]]; then
+    echo "error: same-engine load is implemented for mariadb only, not ${SOURCE_ENGINE}" >&2
+    exit 2
+fi
+
 for database in "${SOURCE_TENANTS_DB}" "${DATABASES[@]}"; do
     dump="${WORK_DIR}/${database}.sql"
     echo "dumping ${database} -> ${dump}"

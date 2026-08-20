@@ -62,6 +62,10 @@ stop_writes() {
 }
 
 wait_for_catchup() {
+    if [[ "${CATCHUP_SKIP:-0}" == "1" ]]; then
+        echo "CATCHUP_SKIP=1: no replica in this rehearsal, nothing to drain"
+        return 0
+    fi
     local deadline=$(($(date +%s) + CATCHUP_TIMEOUT_SECONDS))
     while true; do
         local lag
@@ -72,11 +76,21 @@ wait_for_catchup() {
         else
             lag="$(MYSQL_PWD="${TARGET_PASSWORD}" mariadb -h "${TARGET_HOST}" -P "${TARGET_PORT}" -u "${TARGET_USER}" \
                 -N -B -e "show replica status\G" | awk -F': *' '/Seconds_Behind_Master/ {print $2}')"
-            lag="${lag:-0}"
+            if [[ -z "${lag}" ]]; then
+                echo "error: target reports no replica status, so replication is not configured and the catch-up phase" >&2
+                echo "       cannot be measured. Set CATCHUP_SKIP=1 to rehearse a dump/restore cutover with no replica." >&2
+                return 1
+            fi
         fi
-        echo "replication lag: ${lag}s"
-        if [[ "${lag}" -le "${CATCHUP_LAG_THRESHOLD_SECONDS}" ]]; then
-            return 0
+        # A stopped or broken replica reports NULL, which must never be read as zero lag: bash treats a non-numeric
+        # value as 0 in an arithmetic comparison and the rehearsal would declare a stale copy caught up.
+        if [[ "${lag}" =~ ^[0-9]+$ ]]; then
+            echo "replication lag: ${lag}s"
+            if [[ "${lag}" -le "${CATCHUP_LAG_THRESHOLD_SECONDS}" ]]; then
+                return 0
+            fi
+        else
+            echo "replication is not running (lag reported as ${lag})" >&2
         fi
         if [[ "$(date +%s)" -ge "${deadline}" ]]; then
             echo "error: replication did not catch up within ${CATCHUP_TIMEOUT_SECONDS}s" >&2
