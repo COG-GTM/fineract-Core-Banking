@@ -1,0 +1,235 @@
+name: IaC Pipeline
+
+on:
+  pull_request:
+    paths:
+      - 'infrastructure/**'
+      - '.github/workflows/iac-pipeline.yml'
+  push:
+    branches:
+      - develop
+    paths:
+      - 'infrastructure/**'
+      - '.github/workflows/iac-pipeline.yml'
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: '1.9.8'
+  TF_IN_AUTOMATION: 'true'
+  WORKING_DIR: infrastructure/terraform/envs/dev
+
+concurrency:
+  group: iac-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fmt:
+    name: Format check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: terraform fmt
+        run: terraform fmt -check -recursive -diff infrastructure/terraform
+
+  validate:
+    name: Validate (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - infrastructure/terraform/envs/dev
+          - infrastructure/terraform/modules/network
+          - infrastructure/terraform/bootstrap
+          - infrastructure/terraform/tests/fixture
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: terraform init
+        run: terraform -chdir=${{ matrix.dir }} init -backend=false -input=false
+      - name: terraform validate
+        run: terraform -chdir=${{ matrix.dir }} validate -no-color
+
+  dry-run:
+    name: Pipeline dry-run against fixture module
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: terraform test
+        run: |
+          terraform -chdir=infrastructure/terraform/tests/fixture init -backend=false -input=false
+          terraform -chdir=infrastructure/terraform/tests/fixture test -no-color
+
+  policy-scan:
+    name: Policy scan (tfsec + Checkov)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tfsec
+        run: |
+          curl -sSLf -o "$RUNNER_TEMP/tfsec" \
+            "https://github.com/aquasecurity/tfsec/releases/download/v${TFSEC_VERSION}/tfsec-linux-amd64"
+          chmod +x "$RUNNER_TEMP/tfsec"
+        env:
+          TFSEC_VERSION: '1.28.13'
+
+      - name: tfsec
+        run: |
+          "$RUNNER_TEMP/tfsec" infrastructure/terraform --force-all-dirs --no-color \
+            --format sarif --out tfsec.sarif --soft-fail
+          "$RUNNER_TEMP/tfsec" infrastructure/terraform --force-all-dirs --no-color --concise-output
+
+      - name: Checkov
+        id: checkov
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: infrastructure/terraform
+          framework: terraform
+          output_format: cli,sarif
+          output_file_path: console,checkov.sarif
+          soft_fail: false
+
+      - name: Upload tfsec SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: tfsec.sarif
+          category: tfsec
+
+      - name: Upload Checkov SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
+
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [fmt, validate, dry-run, policy-scan]
+    if: github.event_name == 'pull_request' && vars.AWS_IAC_PLAN_ROLE_ARN != ''
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_IAC_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      # State locking is enforced by the DynamoDB table configured in backend.hcl.
+      - name: terraform init
+        run: terraform -chdir=$WORKING_DIR init -input=false -backend-config=backend.hcl
+
+      - name: terraform plan
+        id: plan
+        env:
+          TF_VAR_logs_kms_key_arn: ${{ vars.LOGS_KMS_KEY_ARN }}
+        run: |
+          set -o pipefail
+          terraform -chdir=$WORKING_DIR plan -input=false -lock-timeout=5m -no-color -out=tfplan | tee plan.txt
+          {
+            echo 'summary<<PLAN_EOF'
+            tail -c 60000 plan.txt
+            echo 'PLAN_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-dev
+          path: ${{ env.WORKING_DIR }}/tfplan
+          retention-days: 5
+
+      - name: Comment plan on PR
+        uses: actions/github-script@v7
+        env:
+          PLAN_SUMMARY: ${{ steps.plan.outputs.summary }}
+        with:
+          script: |
+            const marker = '<!-- terraform-plan-dev -->';
+            const plan = process.env.PLAN_SUMMARY;
+            const body = `${marker}\n### Terraform plan — dev\n\n<details><summary>Show plan</summary>\n\n\`\`\`terraform\n${plan}\n\`\`\`\n\n</details>`;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+  apply:
+    name: Apply (manual approval)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [fmt, validate, dry-run, policy-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop' && vars.AWS_IAC_APPLY_ROLE_ARN != ''
+    # Requires a reviewer on the `dev-apply` environment: no apply happens
+    # without a human approving the run.
+    environment: dev-apply
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_IAC_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: terraform -chdir=$WORKING_DIR init -input=false -backend-config=backend.hcl
+
+      - name: terraform apply
+        env:
+          TF_VAR_logs_kms_key_arn: ${{ vars.LOGS_KMS_KEY_ARN }}
+        run: terraform -chdir=$WORKING_DIR apply -input=false -auto-approve -lock-timeout=5m
