@@ -60,7 +60,12 @@ spec:
           command: ['sh', '-c', 'echo -e "Checking for the availability of MYSQL server deployment"; while ! nc -z "fineractmysql" 3306; do sleep 1; printf "-"; done; echo -e " >> MYSQL server has started";']
       containers:
       - name: fineract-server
-        image: apache/fineract:latest
+        # Image references are resolved by digest, never by tag. Substitute
+        # __FINERACT_IMAGE_REF__ with image.ref from the release artefact record
+        # published by .github/workflows/publish-ecr.yml, e.g.
+        # <account>.dkr.ecr.<region>.amazonaws.com/fineract@sha256:<digest>.
+        # See docs/migration/ws2-supply-chain.md.
+        image: __FINERACT_IMAGE_REF__
         resources:
           limits:
             cpu: "1000m"

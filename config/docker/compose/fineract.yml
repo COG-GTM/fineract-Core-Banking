@@ -18,7 +18,11 @@
 
 services:
   fineract:
-    image: fineract:latest
+    # Defaults to the image built locally by :fineract-provider:jibDockerBuild.
+    # Set FINERACT_IMAGE to a digest reference (registry/repository@sha256:...)
+    # taken from the release artefact record to run a published image; see
+    # docs/migration/ws2-supply-chain.md.
+    image: ${FINERACT_IMAGE:-fineract:latest}
     user: "${FINERACT_USER}:${FINERACT_GROUP}"
     volumes:
       - ${PWD}/config/docker/logback/logback-override.xml:/app/logback-override.xml
