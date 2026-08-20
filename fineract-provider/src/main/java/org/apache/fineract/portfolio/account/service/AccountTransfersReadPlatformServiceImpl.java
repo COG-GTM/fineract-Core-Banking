@@ -418,9 +418,9 @@ public class AccountTransfersReadPlatformServiceImpl implements AccountTransfers
         sqlBuilder.append(" on det.id = trans.account_transfer_details_id ");
         sqlBuilder.append(" where trans.is_reversed = false ");
         sqlBuilder.append(" and trans.transaction_date = ? ");
-        sqlBuilder.append(" and IF(1=?, det.from_loan_account_id = ?, det.from_savings_account_id = ?) ");
+        sqlBuilder.append(" and case when ? = 1 then det.from_loan_account_id else det.from_savings_account_id end = ? ");
 
         return this.jdbcTemplate.queryForObject(sqlBuilder.toString(), BigDecimal.class, DATE_TIME_FORMATTER.format(transactionDate),
-                accountType, accountId, accountId);
+                accountType, accountId);
     }
 }

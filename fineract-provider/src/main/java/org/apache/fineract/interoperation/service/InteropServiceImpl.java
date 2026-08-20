@@ -155,7 +155,8 @@ public class InteropServiceImpl implements InteropService {
         public String schema() {
             return " country.code_value as nationality, c.date_of_birth as dateOfBirth, c.mobile_no as contactPhone, gender.code_value as gender, c.email_address as email, "
                     + "kyc.code_value as idType, ci.document_key as idNo, ci." + sqlGenerator.escape("description") + " as description, "
-                    + "country.code_value as country, a.`address_line_1`, a.`address_line_2`, "
+                    + "country.code_value as country, a." + sqlGenerator.escape("address_line_1") + ", a."
+                    + sqlGenerator.escape("address_line_2") + ", "
                     + "a.city, state.code_value as stateProvince, a.postal_code as postalCode, c.firstname as firstName, c.middlename as middleName,"
                     + "c.lastname as lastName, c.display_name as displayName" + " from " + "m_client c "
                     + "left join m_client_address ca on c.id=ca.client_id " + "left join m_address a on a.id = ca.address_id "
