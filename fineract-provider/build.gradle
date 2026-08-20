@@ -16,6 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+import org.apache.fineract.gradle.image.ImageReference
+
 description = 'Fineract Provider'
 
 apply plugin: 'org.zeroturnaround.gradle.jrebel'
@@ -275,9 +277,13 @@ jib {
     to {
         image = 'fineract'
         tags = [
-            "${project.version}",
-            'latest'
+            "${project.version}"
         ]
+    }
+
+    outputPaths {
+        digest = "${project.buildDir}/jib-image.digest"
+        imageId = "${project.buildDir}/jib-image.id"
     }
 
     container {
@@ -300,6 +306,24 @@ jib {
     dependencies {
         implementation 'org.mariadb.jdbc:mariadb-java-client'
         implementation 'org.postgresql:postgresql'
+    }
+}
+
+tasks.register('resolveImageReference') {
+    description = 'Resolves the immutable reference deployments must use: the published repository pinned to the digest Jib wrote.'
+    group = 'publishing'
+
+    def digestFile = file("${project.buildDir}/jib-image.digest")
+    def referenceFile = file("${project.buildDir}/fineract-image-reference.txt")
+    def repository = findProperty('imageRepository') ?: System.getProperty('jib.to.image') ?: jib.to.image
+
+    inputs.file(digestFile)
+    outputs.file(referenceFile)
+
+    doLast {
+        def reference = ImageReference.ofDigest(repository as String, digestFile.text.trim())
+        referenceFile.text = reference.toDeployableReference()
+        println "Deployable image reference: ${reference.toDeployableReference()}"
     }
 }
 

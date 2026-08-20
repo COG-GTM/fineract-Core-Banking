@@ -21,7 +21,7 @@ version: "3.8"
 services:
   fineract:
     # user: "${FINERACT_USER}:${FINERACT_GROUP}"
-    image: ${IMAGE_NAME:-fineract-custom:latest}
+    image: ${IMAGE_NAME:?set IMAGE_NAME to a digest-pinned reference, or to the locally built fineract-custom:<version> tag}
     volumes:
       - ${PWD}/config/docker/logback/logback-override.xml:/app/logback-override.xml
       - ${PWD}/config/docker/aws/etc/credentials:/etc/aws/credentials:ro
