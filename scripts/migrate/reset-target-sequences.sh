@@ -47,8 +47,13 @@ target_psql() {
     PGPASSWORD="${TARGET_PASSWORD}" psql -h "${TARGET_HOST}" -p "${TARGET_PORT}" -U "${TARGET_USER}" -d "$1" -At -v ON_ERROR_STOP=1 "${@:2}"
 }
 
-readarray -t DATABASES < <(target_psql "${TARGET_TENANTS_DB}" \
-    -c "select c.schema_name from tenants t join tenant_server_connections c on c.id = t.oltp_id order by t.identifier")
+registry="$(target_psql "${TARGET_TENANTS_DB}" \
+    -c "select c.schema_name from tenants t join tenant_server_connections c on c.id = t.oltp_id order by t.identifier")"
+readarray -t DATABASES <<<"${registry}"
+if [[ ${#DATABASES[@]} -eq 0 || -z "${DATABASES[0]}" ]]; then
+    echo "error: tenant registry ${TARGET_TENANTS_DB} lists no tenants, so no sequence was advanced" >&2
+    exit 1
+fi
 
 for database in "${DATABASES[@]}"; do
     echo "resetting sequences in ${database}"
@@ -56,6 +61,8 @@ for database in "${DATABASES[@]}"; do
         do \$\$
         declare
             record_row record;
+            advanced integer := 0;
+            next_value bigint;
         begin
             for record_row in
                 -- information_schema.sequences omits sequences owned by identity and serial columns,
@@ -70,8 +77,15 @@ for database in "${DATABASES[@]}"; do
                 where sequence_name is not null
             loop
                 execute format('select setval(%L, coalesce((select max(%I) from %I), 0) + 1, false)',
-                    record_row.sequence_name, record_row.column_name, record_row.table_name);
+                    record_row.sequence_name, record_row.column_name, record_row.table_name)
+                    into next_value;
+                advanced := advanced + 1;
+                raise notice 'advanced % to %', record_row.sequence_name, next_value;
             end loop;
+            if advanced = 0 then
+                raise exception 'no owned sequences found, so nothing was advanced';
+            end if;
+            raise notice 'advanced % sequence(s)', advanced;
         end
         \$\$;"
 done
