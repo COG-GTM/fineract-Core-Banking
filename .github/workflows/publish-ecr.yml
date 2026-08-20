@@ -1,0 +1,205 @@
+name: Fineract Publish to Amazon ECR
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - 1.*
+  pull_request:
+    paths:
+      - '.github/workflows/publish-ecr.yml'
+      - 'scripts/release-artifact-record.sh'
+      - 'fineract-provider/build.gradle'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_digest: ${{ steps.digest.outputs.image_digest }}
+      image_ref: ${{ steps.digest.outputs.image_ref }}
+      published: ${{ steps.digest.outputs.published }}
+    env:
+      DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REGISTRY: ${{ vars.AWS_ECR_REGISTRY }}
+      ECR_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
+      SCAN_IMAGE: fineract-scan:ci
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@f29f5a9d7b09a7c6b29859002d29d24e1674c884 # v5.0.1
+
+      - name: Compute image metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          short_hash="$(git rev-parse --short HEAD)"
+          long_hash="$(git rev-parse HEAD)"
+          # Commit timestamp, not build timestamp: the same commit must yield the same image metadata.
+          commit_time="$(git show -s --format=%cI HEAD)"
+          # Mutable, human-facing tags (branch or release tag, plus the short hash).
+          tags="${GITHUB_REF_NAME//\//-}"
+          if [ "${GITHUB_REF_NAME}" = "develop" ]; then
+            tags="${tags},${short_hash},${long_hash}"
+          fi
+          # Immutable tag: content-addressed by commit, never re-pushed for a different build.
+          immutable_tag="sha-${long_hash}"
+          tags="${tags},${immutable_tag}"
+          {
+            echo "short_hash=${short_hash}"
+            echo "long_hash=${long_hash}"
+            echo "commit_time=${commit_time}"
+            echo "tags=${tags}"
+            echo "immutable_tag=${immutable_tag}"
+          } >> "$GITHUB_OUTPUT"
+
+      # The deployable module's SBOM, not the root aggregate: the root cyclonedxBom
+      # task currently fails on a Jackson incompatibility (see
+      # docs/migration/ws2-supply-chain.md), and the image only ships this module.
+      - name: Generate CycloneDX SBOM
+        run: ./gradlew --no-daemon --console=plain :fineract-provider:cyclonedxDirectBom
+
+      - name: Collect SBOM
+        id: sbom
+        run: |
+          set -euo pipefail
+          mkdir -p build/supply-chain
+          sbom_source=fineract-provider/build/reports/cyclonedx-direct/bom.json
+          if [ ! -s "${sbom_source}" ]; then
+            echo "::error::No CycloneDX SBOM produced at ${sbom_source}"
+            exit 1
+          fi
+          cp "${sbom_source}" build/supply-chain/fineract-sbom.cdx.json
+          sha256sum build/supply-chain/fineract-sbom.cdx.json | awk '{print $1}' > build/supply-chain/fineract-sbom.cdx.json.sha256
+          echo "sbom_sha256=$(cat build/supply-chain/fineract-sbom.cdx.json.sha256)" >> "$GITHUB_OUTPUT"
+
+      - name: Build the image into the local Docker daemon for scanning
+        run: |
+          ./gradlew --no-daemon --console=plain :fineract-provider:jibDockerBuild \
+            -x test -x cucumber \
+            -Djib.to.image=${SCAN_IMAGE} \
+            -Djib.container.creationTime=${{ steps.meta.outputs.commit_time }} \
+            -Djib.container.filesModificationTime=${{ steps.meta.outputs.commit_time }}
+
+      - name: Scan the image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.SCAN_IMAGE }}
+          format: 'json'
+          output: 'build/supply-chain/trivy-image-report.json'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Summarise the Trivy findings
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          with open('build/supply-chain/trivy-image-report.json') as fh:
+              report = json.load(fh)
+          counts = {}
+          for result in report.get('Results') or []:
+              for vuln in result.get('Vulnerabilities') or []:
+                  counts[vuln['Severity']] = counts.get(vuln['Severity'], 0) + 1
+          print('### Trivy image scan')
+          print('')
+          print('| Severity | Count |')
+          print('| --- | --- |')
+          for severity in ('CRITICAL', 'HIGH'):
+              print(f'| {severity} | {counts.get(severity, 0)} |')
+          PY
+
+      - name: Configure AWS credentials via GitHub OIDC
+        if: ${{ vars.AWS_ECR_REGISTRY != '' }}
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ECR_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: fineract-ecr-publish-${{ github.run_id }}
+
+      - name: Log in to Amazon ECR
+        if: ${{ vars.AWS_ECR_REGISTRY != '' }}
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2.1.6
+
+      - name: Publish the Apache Fineract image to Amazon ECR
+        if: ${{ vars.AWS_ECR_REGISTRY != '' }}
+        run: |
+          ./gradlew --no-daemon --console=plain :fineract-provider:jib -x test -x cucumber \
+            -Djib.from.platforms=linux/amd64,linux/arm64 \
+            -Djib.to.image=${ECR_REGISTRY}/${ECR_REPOSITORY} \
+            -Djib.to.tags=${{ steps.meta.outputs.tags }} \
+            -Djib.container.creationTime=${{ steps.meta.outputs.commit_time }} \
+            -Djib.container.filesModificationTime=${{ steps.meta.outputs.commit_time }}
+
+      - name: Extract the published image digest
+        id: digest
+        run: |
+          set -euo pipefail
+          digest_file=fineract-provider/build/jib-image.digest
+          if [ ! -s "${digest_file}" ] || [ -z "${ECR_REGISTRY}" ]; then
+            echo "No registry publication in this run; deployments have no digest to consume."
+            {
+              echo "published=false"
+              echo "image_digest="
+              echo "image_ref="
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          digest="$(cat "${digest_file}")"
+          image_ref="${ECR_REGISTRY}/${ECR_REPOSITORY}@${digest}"
+          {
+            echo "published=true"
+            echo "image_digest=${digest}"
+            echo "image_ref=${image_ref}"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Published image"
+            echo ""
+            echo "\`${image_ref}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write the release artefact record
+        run: |
+          ./scripts/release-artifact-record.sh \
+            --output build/supply-chain/release-artifact-record.json \
+            --commit ${{ steps.meta.outputs.long_hash }} \
+            --commit-time ${{ steps.meta.outputs.commit_time }} \
+            --ref-name "${GITHUB_REF_NAME}" \
+            --registry "${ECR_REGISTRY}" \
+            --repository "${ECR_REPOSITORY}" \
+            --digest "${{ steps.digest.outputs.image_digest }}" \
+            --tags "${{ steps.meta.outputs.tags }}" \
+            --immutable-tag "${{ steps.meta.outputs.immutable_tag }}" \
+            --sbom build/supply-chain/fineract-sbom.cdx.json \
+            --sbom-sha256 "${{ steps.sbom.outputs.sbom_sha256 }}" \
+            --scan-report build/supply-chain/trivy-image-report.json \
+            --build-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          cat build/supply-chain/release-artifact-record.json
+
+      - name: Upload the release artefact record, SBOM and scan report
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4
+        with:
+          name: fineract-release-artifact-record
+          path: build/supply-chain
+          retention-days: 30
+          if-no-files-found: error
