@@ -111,7 +111,7 @@ public final class ReconciliationComparator {
             BigDecimal debit = debits.getOrDefault(currency, BigDecimal.ZERO);
             if (credit.compareTo(debit) != 0) {
                 variances.add(new Variance(Variance.Kind.TRIAL_BALANCE_IMBALANCE, side + " trial balance " + currency,
-                        "debits do not equal credits", text(debit), text(credit)));
+                        "debits " + text(debit) + " do not equal credits " + text(credit), text(debit), text(credit)));
             }
         }
         return variances;

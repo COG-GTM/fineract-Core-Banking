@@ -82,7 +82,7 @@ for database in "${SOURCE_TENANTS_DB}" "${DATABASES[@]}"; do
     MYSQL_PWD="${SOURCE_PASSWORD}" mariadb-dump \
         -h "${SOURCE_HOST}" -P "${SOURCE_PORT}" -u "${SOURCE_USER}" \
         --single-transaction --quick --routines --events --triggers \
-        --set-gtid-purged=OFF --databases "${database}" >"${dump}"
+        --databases "${database}" >"${dump}"
 
     echo "restoring ${database} into ${TARGET_HOST}"
     MYSQL_PWD="${TARGET_PASSWORD}" mariadb \

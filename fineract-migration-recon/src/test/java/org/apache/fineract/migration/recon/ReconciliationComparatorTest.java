@@ -128,6 +128,7 @@ class ReconciliationComparatorTest {
 
         assertThat(ReconciliationComparator.checkTrialBalance("target", unbalanced)).singleElement().satisfies(variance -> {
             assertThat(variance.kind()).isEqualTo(Variance.Kind.TRIAL_BALANCE_IMBALANCE);
+            assertThat(variance.detail()).isEqualTo("debits 850 do not equal credits 900");
             assertThat(variance.sourceValue()).isEqualTo("850");
             assertThat(variance.targetValue()).isEqualTo("900");
         });

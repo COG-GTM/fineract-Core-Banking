@@ -58,15 +58,19 @@ for database in "${DATABASES[@]}"; do
             record_row record;
         begin
             for record_row in
-                select sequence_schema, sequence_name, table_name, column_name
-                from information_schema.columns
-                join information_schema.sequences
-                    on sequences.sequence_name = table_name || '_' || column_name || '_seq'
-                    and sequences.sequence_schema = columns.table_schema
-                where columns.table_schema = 'public' and columns.is_identity = 'YES'
+                -- information_schema.sequences omits sequences owned by identity and serial columns,
+                -- which is every sequence Fineract has; pg_get_serial_sequence resolves both.
+                select table_name, column_name, sequence_name
+                from (
+                    select table_name, column_name,
+                        pg_get_serial_sequence(format('%I.%I', table_schema, table_name), column_name) as sequence_name
+                    from information_schema.columns
+                    where table_schema = 'public'
+                ) owned
+                where sequence_name is not null
             loop
                 execute format('select setval(%L, coalesce((select max(%I) from %I), 0) + 1, false)',
-                    record_row.sequence_schema || '.' || record_row.sequence_name, record_row.column_name, record_row.table_name);
+                    record_row.sequence_name, record_row.column_name, record_row.table_name);
             end loop;
         end
         \$\$;"
