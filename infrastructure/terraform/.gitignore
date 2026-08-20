@@ -1,0 +1,14 @@
+# Provider plugins, module caches and lock-only working state
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Backend and variable files that carry account-specific values
+backend.hcl
+*.auto.tfvars
+terraform.tfvars
+
+# Test-only override written by tests/offline-plan.sh
+zz_offline_override.tf
+.terraform.lock.hcl
