@@ -165,7 +165,14 @@ handed to the workstream that owns it.
    is recorded as reproduced locally on the CI image and configuration. Owner: the dialect workstream.
 5. **Three bulk-import endpoints return HTTP 500 on unmodified `develop`** (`ws0-baseline.md` §2.3,
    failures 2, 3 and 19). Recorded, not diagnosed.
-6. All eleven counts asserted in `current-state.md` §§2–9 reproduce exactly (`ws0-baseline.md` §3). Two
+6. **The e2e workflow's readiness gate does not gate on the application.**
+   `.github/workflows/build-e2e-tests.yml:72-81` polls
+   `docker ps --filter "name=fineract" --filter "health=healthy"`; under compose the database container is
+   named `fineract-core-banking-db-1`, which also matches the `name=fineract` substring, so the loop can
+   exit as soon as PostgreSQL is healthy. Masked today by the following `curl --retry` step (observed: 3
+   `SSL routines::unexpected eof` retries over ~30 s while the app booted — `ws0-baseline.md` §4.6).
+   Owner: WS5/WS6 — the same substring pattern must not be carried into ECS health checks.
+7. All eleven counts asserted in `current-state.md` §§2–9 reproduce exactly (`ws0-baseline.md` §3). Two
    *statements* around them do not: the "34 modules" figure is really 41 Gradle projects, and the `custom/`
    tree is not empty. Neither changes a design decision; both change the credibility of the document if
    left uncorrected.

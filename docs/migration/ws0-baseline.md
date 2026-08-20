@@ -172,7 +172,117 @@ topology statements re-verified individually in `ws0-decision-register.md` with 
 
 ## 4. End-to-end baseline
 
-E2E_PLACEHOLDER
+Repo: `/home/ubuntu/repos/fineract-Core-Banking`
+Application code commit under test: `8c187f9d1` (unmodified `develop`).
+Tree HEAD at run time: `1586b745d` — adds only `docs/migration/ws0-baseline.md` and
+`docs/migration/ws0-decision-register.md`. `git diff --stat 8c187f9d1` = 2 Markdown files,
+365 insertions, **zero** changes to application code, build files, workflows or manifests.
+
+Procedure followed: `.github/workflows/build-e2e-tests.yml` (steps "Build the image",
+"Start the Fineract stack", "Wait for Manager to be ready", "Execute tests for shard N").
+
+### 4.0 Coverage
+Full e2e suite: 48 feature files / 2,243 declared scenarios, split by
+`scripts/split-features.sh` into 10 CI shards. This baseline executed **shard 1 of 10 only**:
+5 feature files, 325 declared scenarios → **328 executed scenarios = 14.6 % of 2,243**.
+Shards 2–10 were **not run** (serial execution ≈ 10+ h on this host).
+
+### 4.1 Commands, exit codes, durations
+
+| # | Command | Exit | Wall time |
+|---|---|---|---|
+| 1 | `./gradlew --no-daemon --console=plain :fineract-provider:jibDockerBuild -Djib.to.image=fineract -x test -x cucumber` | 0 | 33 s |
+| 2 | `docker compose -f docker-compose-postgresql-test-activemq.yml up -d` | 0 | 3.4 s |
+| 3 | health-wait loop (workflow lines 68–86) + `curl -f -k .../actuator/health` | 0 | 30 s (3 SSL-eof retries) |
+| 4 | `scripts/split-features.sh 10 1` | 0 | <1 s |
+| 5a | `./gradlew ... :fineract-e2e-tests-runner:cucumber -Pcucumber.features=src/test/resources/features/BusinessDate.feature -Dallure.results.directory=... allureReport` | 0 | 120 s |
+| 5b | same, `Loan.feature` | 0 | 1 154 s |
+| 5c | same, `LoanAccrualActivity.feature` | 0 | 797 s |
+| 5d | same, `LoanInterestRateChange.feature` | 0 | 296 s |
+| 5e | same, `LoanProduct.feature` | 0 | 117 s |
+|  | **shard 1 total** | **0** (`SHARD_1_FAILED=0`) | **2 484 s ≈ 41 min** |
+
+Cucumber env (exactly as workflow): `IMAGE_NAME=fineract`, `BASE_URL=https://localhost:8443`,
+`TEST_USERNAME=mifos`, `TEST_PASSWORD=password`, `TEST_STRONG_PASSWORD=A1b2c3d4e5f$`,
+`TEST_TENANT_ID=default`, `INITIALIZATION_ENABLED=true`, `EVENT_VERIFICATION_ENABLED=true`,
+`ACTIVEMQ_BROKER_URL=tcp://localhost:61616`, `ACTIVEMQ_TOPIC_NAME=events`.
+
+### 4.2 Cucumber counts — shard 1 of 10
+
+| Feature | Scenarios | passed | failed | skipped | Steps | passed | failed | skipped | Gradle |
+|---|---|---|---|---|---|---|---|---|---|
+| BusinessDate.feature | 11 | 11 | 0 | 0 | 17 | 17 | 0 | 0 | BUILD SUCCESSFUL 1 m 59 s |
+| Loan.feature | 185 | 185 | 0 | 0 | 3 230 | 3 230 | 0 | 0 | BUILD SUCCESSFUL 19 m 13 s |
+| LoanAccrualActivity.feature | 81 | 81 | 0 | 0 | 2 322 | 2 322 | 0 | 0 | BUILD SUCCESSFUL 13 m 16 s |
+| LoanInterestRateChange.feature | 34 | 34 | 0 | 0 | 751 | 751 | 0 | 0 | BUILD SUCCESSFUL 4 m 55 s |
+| LoanProduct.feature | 17 | 17 | 0 | 0 | 189 | 189 | 0 | 0 | BUILD SUCCESSFUL 1 m 56 s |
+| **TOTAL** | **328** | **328** | **0** | **0** | **6 509** | **6 509** | **0** | **0** | all 0 |
+
+Independent cross-check: `allure-results-merged-1/*-result.json` = **328** result files,
+status breakdown `{'passed': 328}` — matches the Cucumber summaries exactly, so the run was
+not silently truncated.
+
+Scenario-count notes: `Loan.feature` declares 186 scenarios but 185 executed — 1 scenario is
+`@Skip`-tagged and excluded by the runner's `tags = 'not @Skip'`. `BusinessDate.feature`
+declares 7 but executes 11 due to `Scenario Outline` example expansion. Net 325 declared → 328
+executed.
+
+### 4.3 Failing scenarios
+**None.** 0 failed, 0 skipped-at-runtime across all 328 executed scenarios in shard 1.
+(1 scenario excluded pre-execution by the `@Skip` tag in `Loan.feature`.)
+
+### 4.4 Authenticated smoke calls (raw)
+
+```
+===== GET /fineract-provider/api/v1/offices (basic auth mifos/password, Fineract-Platform-TenantId: default) =====
+[{"id":1,"name":"Head Office","nameDecorated":"Head Office","externalId":"1","openingDate":[2009,1,1],"hierarchy":"."}]
+HTTP_STATUS=200 time=1.048324s
+
+===== NEGATIVE CONTROL: same call, wrong password =====
+{"timestamp":"2026-08-20T22:35:28.967Z","status":401,"error":"Unauthorized","path":"/fineract-provider/api/v1/offices"}
+HTTP_STATUS=401
+
+===== GET /fineract-provider/actuator/health =====
+{"status":"UP","groups":["liveness","readiness"]}
+HTTP_STATUS=200
+
+===== GET /fineract-provider/actuator/health/liveness =====
+{"status":"UP"}
+HTTP_STATUS=200
+
+===== GET /fineract-provider/actuator/health/readiness =====
+{"status":"UP"}
+HTTP_STATUS=200
+```
+
+Re-checked after the 41-minute shard run: `/actuator/health` still `{"status":"UP",...}` HTTP 200,
+all three containers still up, fineract `healthy`.
+
+### 4.5 Versions
+
+| Component | Version / digest |
+|---|---|
+| JDK (Gradle launcher + daemon) | OpenJDK 21.0.11 (Ubuntu 21.0.11+10-1-22.04.2) |
+| Gradle | 8.14.3 |
+| Docker Engine | 27.4.1 (build b9d17ea) |
+| Docker Compose | v2.32.1 |
+| App image | `fineract:latest` = `fineract:1.15.0-SNAPSHOT`, sha256:1437f430533c…, 573 MB |
+| Database | `postgres:18.3`, sha256:fbaa24359903… |
+| Broker | `symptoma/activemq:5.18.3`, sha256:231cecd0fcbf… |
+
+Note: CI uses Zulu JDK 21; this host used Ubuntu OpenJDK 21.0.11.
+
+### 4.6 Observations (no fixes applied)
+- **Health-gate false positive in the workflow (pre-existing).** Workflow lines 72–81 poll
+  `docker ps --filter "name=fineract" --filter "health=healthy"`. Under compose the DB container
+  is named `fineract-core-banking-db-1`, which also matches the substring `name=fineract`, so the
+  loop can exit as soon as *Postgres* is healthy, before the app is. Here it was harmless (the
+  subsequent `curl --retry` covered it — 3 `SSL routines::unexpected eof` retries ≈ 30 s while
+  the app finished booting), but the gate does not actually gate on the app.
+- `docker compose up` emits `FINERACT_USER/FINERACT_GROUP variable is not set` warnings and an
+  obsolete `version:` attribute warning — same as CI, non-fatal.
+- The e2e stack's Postgres binds host port 5432; the unit-baseline `postgres` container had to be
+  stopped first. It is currently stopped.
 
 ---
 
