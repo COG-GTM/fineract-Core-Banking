@@ -18,7 +18,8 @@
 
 services:
   fineract:
-    image: fineract:latest
+    # An ECR digest reference for anything deployed, or the locally built fineract:<version> tag for development.
+    image: ${FINERACT_IMAGE:?set FINERACT_IMAGE, e.g. <account>.dkr.ecr.<region>.amazonaws.com/fineract@sha256:<digest>}
     user: "${FINERACT_USER}:${FINERACT_GROUP}"
     volumes:
       - ${PWD}/config/docker/logback/logback-override.xml:/app/logback-override.xml

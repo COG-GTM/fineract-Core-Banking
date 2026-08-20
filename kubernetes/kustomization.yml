@@ -16,11 +16,17 @@
 # under the License.
 #
 
-services:
-  # Frontend service
-  community-app:
-    image: openmf/community-app:master
-    container_name: mifos-ui
-    restart: always
-    ports:
-      - 9090:80
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - fineractmysql-configmap.yml
+  - fineractmysql-deployment.yml
+  - fineract-server-deployment.yml
+
+# The publish workflow rewrites this entry with ./set-image-digest.sh after pushing to ECR, so a rollout always
+# resolves one immutable image. Never replace the digest with a tag.
+images:
+  - name: fineract-server-image
+    newName: PLACEHOLDER.dkr.ecr.PLACEHOLDER.amazonaws.com/fineract
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000

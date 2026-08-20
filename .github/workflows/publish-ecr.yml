@@ -1,0 +1,87 @@
+name: Fineract Publish to ECR
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - 1.*
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DEVELOCITY_ACCESS_KEY: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5
+        with:
+          java-version: '21'
+          distribution: 'zulu'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@f29f5a9d7b09a7c6b29859002d29d24e1674c884 # v5.0.1
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ECR_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr_login
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+
+      - name: Get Git Hashes
+        run: |
+          echo "short_hash=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "long_hash=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        id: git_hashes
+
+      - name: Build and push the Apache Fineract image
+        run:  |
+          TAGS=${{ github.ref_name }}
+          if [ "${{ github.ref_name }}" == "develop" ]; then
+            TAGS="$TAGS,${{ steps.git_hashes.outputs.short_hash }},${{ steps.git_hashes.outputs.long_hash }}"
+          fi
+          ./gradlew --no-daemon --console=plain :fineract-provider:jib -x test -x cucumber \
+            -Djib.from.platforms=linux/amd64,linux/arm64 \
+            -Djib.to.image=${{ steps.ecr_login.outputs.registry }}/${ECR_REPOSITORY} \
+            -Djib.to.tags=$TAGS
+
+      - name: Resolve the deployable digest reference
+        id: image
+        run: |
+          ./gradlew --no-daemon --console=plain :fineract-provider:resolveImageReference \
+            -PimageRepository=${{ steps.ecr_login.outputs.registry }}/${ECR_REPOSITORY}
+          REFERENCE=$(cat fineract-provider/build/fineract-image-reference.txt)
+          echo "reference=$REFERENCE" >> $GITHUB_OUTPUT
+          echo "digest=$(cat fineract-provider/build/jib-image.digest)" >> $GITHUB_OUTPUT
+          echo "### Published image" >> $GITHUB_STEP_SUMMARY
+          echo "\`$REFERENCE\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Record the artefact (digest reference and SBOM)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fineract-image-artefact
+          path: |
+            fineract-provider/build/fineract-image-reference.txt
+            fineract-provider/build/jib-image.digest
+            fineract-provider/build/reports/*.json
+          if-no-files-found: warn
+
+      - name: Pin the Kubernetes deployment to the digest
+        run: |
+          ./kubernetes/set-image-digest.sh \
+            "${{ steps.ecr_login.outputs.registry }}/${ECR_REPOSITORY}" \
+            "${{ steps.image.outputs.digest }}"
+          git --no-pager diff -- kubernetes/kustomization.yml
