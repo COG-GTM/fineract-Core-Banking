@@ -43,6 +43,7 @@ buildscript {
                 'fineract-savings',
                 'fineract-report',
                 'fineract-mix',
+                'fineract-migration-recon',
                 'integration-tests',
                 'twofactor-tests',
                 'oauth2-tests',
