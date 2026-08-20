@@ -35,3 +35,8 @@ gradleExp/
 .java-version
 
 .windsurf/
+# Terraform
+infrastructure/terraform/**/.terraform/
+infrastructure/terraform/**/.terraform.lock.hcl
+*.tfvars
+backend.hcl

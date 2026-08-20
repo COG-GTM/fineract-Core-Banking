@@ -1,0 +1,40 @@
+name: Terraform
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'infrastructure/terraform/**'
+      - '.github/workflows/terraform.yml'
+  pull_request:
+    paths:
+      - 'infrastructure/terraform/**'
+      - '.github/workflows/terraform.yml'
+
+permissions:
+  contents: read
+
+env:
+  TERRAFORM_VERSION: 1.9.8
+
+jobs:
+  edge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - name: Install Terraform
+        run: |
+          curl -fsSLo terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          unzip -o -q terraform.zip -d "$HOME/bin"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Format
+        run: terraform fmt -check -recursive infrastructure/terraform
+      - name: Validate
+        working-directory: infrastructure/terraform/modules/edge
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Test
+        working-directory: infrastructure/terraform/modules/edge
+        run: terraform test
