@@ -254,11 +254,11 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
 
             sql.append("and (gp.status_enum = 300 or (gp.status_enum = 600 and gp.closedon_date >= :dueDate)) ")
                     .append("and (cl.status_enum = 300 or (cl.status_enum = 600 and cl.closedon_date >= :dueDate)) ")
-                    .append("GROUP BY gp.id, cl.id, ln.id, ca.attendance_type_enum ORDER BY gp.id , cl.id , ln.id ").append(") loandata ")
+                    .append("GROUP BY gp.id, cl.id, ln.id, ca.attendance_type_enum, sf.id, gl.id, pl.id, rc.id ORDER BY gp.id , cl.id , ln.id ")
+                    .append(") loandata ")
                     .append("LEFT JOIN m_loan_charge lc ON lc.loan_id = loandata.loanId AND lc.is_paid_derived = false AND lc.is_active = true ")
-                    .append("AND ( lc.due_for_collection_as_of_date  <= :dueDate OR lc.charge_time_enum = 1) ")
-                    .append("GROUP BY loandata.groupId, loandata.clientId, loandata.loanId ")
-                    .append(", loandata.principalDue, loandata.interestDue, loandata.feeDue, loandata.attendanceTypeId ")
+                    .append("AND ( lc.due_for_collection_as_of_date  <= :dueDate OR lc.charge_time_enum = 1) ").append("GROUP BY ")
+                    .append("loandata.groupName, loandata.groupId, loandata.clientName, loandata.staffId, loandata.staffName, loandata.levelId, loandata.levelName, loandata.clientId, loandata.loanId, loandata.accountId, loandata.accountStatusId, loandata.productShortName, loandata.productId, loandata.currencyCode, loandata.currencyDigits, loandata.inMultiplesOf, loandata.currencyName, loandata.currencyDisplaySymbol, loandata.currencyNameCode, loandata.disbursementAmount, loandata.principalDue, loandata.principalPaid, loandata.interestDue, loandata.interestPaid, loandata.feeDue, loandata.feePaid, loandata.attendanceTypeId ")
                     .append("ORDER BY loandata.groupId, ").append("loandata.clientId, ").append("loandata.loanId ");
 
             return sql.toString();
@@ -521,7 +521,7 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
 
             sql.append("and (gp.status_enum = 300 or (gp.status_enum = 600 and gp.closedon_date >= :dueDate)) ")
                     .append("and (cl.status_enum = 300 or (cl.status_enum = 600 and cl.closedon_date >= :dueDate)) ")
-                    .append("GROUP BY gp.id ,cl.id , sa.id ORDER BY gp.id , cl.id , sa.id ");
+                    .append("GROUP BY gp.id ,cl.id , sa.id , sf.id , gl.id , sp.id , rc.id ORDER BY gp.id , cl.id , sa.id ");
 
             return sql.toString();
         }
@@ -746,10 +746,12 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
                 sb.append("ln.loan_officer_id = :staffId and ");
             }
             sb.append("(ln.loan_status_id = 300) ");
-            sb.append("and ln.group_id is null GROUP BY cl.id , ln.id ORDER BY cl.id , ln.id ) loandata ");
+            sb.append("and ln.group_id is null GROUP BY cl.id , ln.id , pl.id , rc.id ORDER BY cl.id , ln.id ) loandata ");
             sb.append(
                     "LEFT JOIN m_loan_charge lc ON lc.loan_id = loandata.loanId AND lc.is_paid_derived = false AND lc.is_active = true AND ( lc.due_for_collection_as_of_date  <= :dueDate OR lc.charge_time_enum = 1) ");
-            sb.append("GROUP BY loandata.clientId, loandata.loanId ORDER BY loandata.clientId, loandata.loanId ");
+            sb.append(
+                    "GROUP BY loandata.clientName, loandata.clientId, loandata.loanId, loandata.accountId, loandata.accountStatusId, loandata.productShortName, loandata.productId, loandata.currencyCode, loandata.currencyDigits, loandata.inMultiplesOf, loandata.currencyName, loandata.currencyDisplaySymbol, loandata.currencyNameCode, loandata.disbursementAmount, loandata.principalDue, loandata.principalPaid, loandata.interestDue, loandata.interestPaid, loandata.feeDue, loandata.feePaid ");
+            sb.append("ORDER BY loandata.clientId, loandata.loanId ");
 
             sql = sb.toString();
         }
@@ -832,7 +834,7 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
             if (checkforStaffId) {
                 sb.append("and sa.field_officer_id = :staffId ");
             }
-            sb.append("GROUP BY cl.id , sa.id ORDER BY cl.id , sa.id ");
+            sb.append("GROUP BY cl.id , sa.id , sp.id , rc.id ORDER BY cl.id , sa.id ");
 
             this.sql = sb.toString();
         }
