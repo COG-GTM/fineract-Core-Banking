@@ -1,0 +1,31 @@
+--
+-- Licensed to the Apache Software Foundation (ASF) under one
+-- or more contributor license agreements. See the NOTICE file
+-- distributed with this work for additional information
+-- regarding copyright ownership. The ASF licenses this file
+-- to you under the Apache License, Version 2.0 (the
+-- "License"); you may not use this file except in compliance
+-- with the License. You may obtain a copy of the License at
+--
+-- http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing,
+-- software distributed under the License is distributed on an
+-- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+-- KIND, either express or implied. See the License for the
+-- specific language governing permissions and limitations
+-- under the License.
+--
+-- name: D11_date_varchar_bind
+-- source: fineract-provider/src/main/java/org/apache/fineract/portfolio/account/service/AccountTransfersReadPlatformServiceImpl.java:421
+-- description: getTotalTransactionAmount bound the transaction date as a
+--   formatted String against m_account_transfer_transaction.transaction_date,
+--   declared DATE. MariaDB coerces the string to a date; PostgreSQL has no
+--   implicit varchar-to-date cast for the "=" operator and fails with
+--   "operator does not exist: date = character varying". The cast below
+--   reproduces what the JDBC driver sends for a String bind parameter.
+-- expect: mysql=pass postgres=fail
+--
+SELECT coalesce(sum(trans.amount), 0) AS total
+  FROM m_account_transfer_transaction trans
+ WHERE trans.transaction_date = cast('2024-02-15' AS varchar(10))

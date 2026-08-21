@@ -1,0 +1,29 @@
+--
+-- Licensed to the Apache Software Foundation (ASF) under one
+-- or more contributor license agreements. See the NOTICE file
+-- distributed with this work for additional information
+-- regarding copyright ownership. The ASF licenses this file
+-- to you under the Apache License, Version 2.0 (the
+-- "License"); you may not use this file except in compliance
+-- with the License. You may obtain a copy of the License at
+--
+-- http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing,
+-- software distributed under the License is distributed on an
+-- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+-- KIND, either express or implied. See the License for the
+-- specific language governing permissions and limitations
+-- under the License.
+--
+-- name: D08_double_quoted_string_literal
+-- source: audit control case for the identifier quoting and case folding class
+-- description: A double-quoted token is a string literal in MySQL/MariaDB
+--   (unless ANSI_QUOTES is set) and a quoted identifier in PostgreSQL, where it
+--   is also case sensitive. Unquoted identifiers fold to lower case on
+--   PostgreSQL and preserve case on MySQL. The audit relies on
+--   DatabaseSpecificSQLGenerator.escape() for every quoted identifier for
+--   exactly this reason; this case pins the divergence.
+-- expect: mysql=pass postgres=fail
+--
+SELECT "not_a_column" AS quoted_token

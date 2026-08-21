@@ -20,7 +20,6 @@ package org.apache.fineract.portfolio.account.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -52,7 +51,6 @@ import org.springframework.util.CollectionUtils;
 @RequiredArgsConstructor
 public class AccountTransfersReadPlatformServiceImpl implements AccountTransfersReadPlatformService {
 
-    private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private final JdbcTemplate jdbcTemplate;
     private final ClientReadPlatformService clientReadPlatformService;
     private final OfficeReadPlatformService officeReadPlatformService;
@@ -418,9 +416,8 @@ public class AccountTransfersReadPlatformServiceImpl implements AccountTransfers
         sqlBuilder.append(" on det.id = trans.account_transfer_details_id ");
         sqlBuilder.append(" where trans.is_reversed = false ");
         sqlBuilder.append(" and trans.transaction_date = ? ");
-        sqlBuilder.append(" and IF(1=?, det.from_loan_account_id = ?, det.from_savings_account_id = ?) ");
+        sqlBuilder.append(" and case when ? = 1 then det.from_loan_account_id else det.from_savings_account_id end = ? ");
 
-        return this.jdbcTemplate.queryForObject(sqlBuilder.toString(), BigDecimal.class, DATE_TIME_FORMATTER.format(transactionDate),
-                accountType, accountId, accountId);
+        return this.jdbcTemplate.queryForObject(sqlBuilder.toString(), BigDecimal.class, transactionDate, accountType, accountId);
     }
 }
