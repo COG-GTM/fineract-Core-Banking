@@ -1,0 +1,97 @@
+name: Deploy to ECS Fargate (dev)
+
+# Rolls a WS2-published image digest into the WS4 dev runtime. The Liquibase migration is a
+# gated one-off task that must succeed before the service is updated; it never runs on
+# service start, because the single-threaded tenant upgrade makes startup time proportional
+# to tenant count.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: 'Image digest to deploy, e.g. sha256:abc...'
+        required: true
+        type: string
+      skip_migration:
+        description: 'Skip the Liquibase task (only for image-only rollbacks)'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER: fineract-dev
+  SERVICE: fineract-dev-api
+  MIGRATION_TASK_DEFINITION: fineract-dev-migrate
+
+jobs:
+  migrate:
+    name: Liquibase (gated)
+    if: ${{ !inputs.skip_migration }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    # Requires a reviewer on the GitHub environment: schema changes are the gate, not the
+    # deployment.
+    environment: dev-database
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run Liquibase as a one-off task
+        env:
+          CLUSTER: ${{ env.CLUSTER }}
+          TASK_DEFINITION: ${{ env.MIGRATION_TASK_DEFINITION }}
+          SUBNETS: ${{ vars.PRIVATE_APP_SUBNET_IDS }}
+          SECURITY_GROUP: ${{ vars.TASKS_SECURITY_GROUP_ID }}
+        run: ./scripts/ecs-run-liquibase.sh
+
+  deploy:
+    name: Roll the fineract-api service
+    needs: [migrate]
+    if: ${{ always() && (needs.migrate.result == 'success' || inputs.skip_migration) }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    environment: dev
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Register a task definition revision pinned to the digest
+        id: taskdef
+        run: |
+          set -euo pipefail
+          current=$(aws ecs describe-task-definition --task-definition "${SERVICE}" --query taskDefinition)
+          image="${{ vars.ECR_REPOSITORY_URI }}@${{ inputs.image_digest }}"
+          echo "$current" \
+            | jq --arg image "$image" '
+                .containerDefinitions[0].image = $image
+                | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                      .compatibilities, .registeredAt, .registeredBy)' \
+            > taskdef.json
+          arn=$(aws ecs register-task-definition --cli-input-json file://taskdef.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "arn=$arn" >> "$GITHUB_OUTPUT"
+
+      - name: Update service and wait for a stable rollout
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "${CLUSTER}" \
+            --service "${SERVICE}" \
+            --task-definition "${{ steps.taskdef.outputs.arn }}"
+          # Circuit breaker rolls back automatically if the new tasks never pass the
+          # readiness health check.
+          aws ecs wait services-stable --cluster "${CLUSTER}" --services "${SERVICE}"
