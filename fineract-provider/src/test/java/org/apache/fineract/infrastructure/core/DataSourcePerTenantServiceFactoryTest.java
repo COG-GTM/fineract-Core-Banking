@@ -85,6 +85,10 @@ public class DataSourcePerTenantServiceFactoryTest {
     public static final String MASTER_DB_DRIVER_CLASS_NAME = "org.mariadb.jdbc.Driver";
     public static final String MASTER_DB_CONN_TEST_QUERY = "SELECT 1";
     public static final boolean MASTER_DB_AUTO_COMMIT_ENABLED = true;
+    public static final long MASTER_DB_CONNECTION_TIMEOUT = 20000L;
+    public static final long MASTER_DB_IDLE_TIMEOUT = 60000L;
+    public static final long MASTER_DB_MAX_LIFETIME = 1800000L;
+    public static final long MASTER_DB_KEEPALIVE_TIME = 120000L;
 
     public static final String MASTER_MASTER_PASSWORD = "fineract";
 
@@ -159,6 +163,10 @@ public class DataSourcePerTenantServiceFactoryTest {
         given(tenantHikariConfig.getConnectionTestQuery()).willReturn(MASTER_DB_CONN_TEST_QUERY);
         given(tenantHikariConfig.getDataSourceProperties()).willReturn(mock(Properties.class));
         given(tenantHikariConfig.isAutoCommit()).willReturn(MASTER_DB_AUTO_COMMIT_ENABLED);
+        given(tenantHikariConfig.getConnectionTimeout()).willReturn(MASTER_DB_CONNECTION_TIMEOUT);
+        given(tenantHikariConfig.getIdleTimeout()).willReturn(MASTER_DB_IDLE_TIMEOUT);
+        given(tenantHikariConfig.getMaxLifetime()).willReturn(MASTER_DB_MAX_LIFETIME);
+        given(tenantHikariConfig.getKeepaliveTime()).willReturn(MASTER_DB_KEEPALIVE_TIME);
 
         given(hikariDataSourceFactory.create(any())).willReturn(mock(HikariDataSource.class));
 
@@ -356,6 +364,26 @@ public class DataSourcePerTenantServiceFactoryTest {
         assertEquals(MASTER_DB_DRIVER_CLASS_NAME, hikariConfig.getDriverClassName());
         assertEquals(MASTER_DB_CONN_TEST_QUERY, hikariConfig.getConnectionTestQuery());
         assertEquals(MASTER_DB_AUTO_COMMIT_ENABLED, hikariConfig.isAutoCommit());
+    }
+
+    @Test
+    void testCreateNewDataSourceFor_ShouldInheritConnectionLifecycleSettings_FromTenantRegistryPool() {
+        // given
+        FineractProperties.FineractModeProperties modeProperties = createModeProps(MASTER_DB_AUTO_COMMIT_ENABLED,
+                MASTER_DB_AUTO_COMMIT_ENABLED, MASTER_DB_AUTO_COMMIT_ENABLED, MASTER_DB_AUTO_COMMIT_ENABLED);
+        given(fineractProperties.getMode()).willReturn(modeProperties);
+
+        // when
+        DataSource dataSource = underTest.createNewDataSourceFor(TENANT, defaultTenant.getConnection());
+
+        // then
+        assertNotNull(dataSource);
+        verify(hikariDataSourceFactory).create(hikariConfigCaptor.capture());
+        HikariConfig hikariConfig = hikariConfigCaptor.getValue();
+        assertEquals(MASTER_DB_CONNECTION_TIMEOUT, hikariConfig.getConnectionTimeout());
+        assertEquals(MASTER_DB_IDLE_TIMEOUT, hikariConfig.getIdleTimeout());
+        assertEquals(MASTER_DB_MAX_LIFETIME, hikariConfig.getMaxLifetime());
+        assertEquals(MASTER_DB_KEEPALIVE_TIME, hikariConfig.getKeepaliveTime());
     }
 
     private FineractProperties.FineractModeProperties createModeProps(boolean readEnabled, boolean writeEnabled, boolean batchWorkerEnabled,

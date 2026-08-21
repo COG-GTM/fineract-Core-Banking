@@ -72,4 +72,11 @@ dependencies {
     implementation 'com.squareup.retrofit2:converter-jackson'
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'com.squareup.okhttp3:okhttp'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }
