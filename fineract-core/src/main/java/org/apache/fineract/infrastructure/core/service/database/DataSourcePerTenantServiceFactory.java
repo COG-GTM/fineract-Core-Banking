@@ -95,6 +95,13 @@ public class DataSourcePerTenantServiceFactory {
         config.setDriverClassName(hikariConfig.getDriverClassName());
         config.setConnectionTestQuery(hikariConfig.getConnectionTestQuery());
         config.setAutoCommit(hikariConfig.isAutoCommit());
+        // A tenant pool that never releases or recycles a connection holds its share of the server's
+        // connection limit for the life of the instance, so the lifecycle settings of the tenant registry
+        // pool apply to every tenant pool as well.
+        config.setConnectionTimeout(hikariConfig.getConnectionTimeout());
+        config.setIdleTimeout(hikariConfig.getIdleTimeout());
+        config.setMaxLifetime(hikariConfig.getMaxLifetime());
+        config.setKeepaliveTime(hikariConfig.getKeepaliveTime());
 
         // https://github.com/brettwooldridge/HikariCP/wiki/MBean-(JMX)-Monitoring-and-Management
         config.setRegisterMbeans(true);

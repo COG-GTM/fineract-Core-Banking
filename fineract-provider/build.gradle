@@ -161,11 +161,15 @@ if (!(project.hasProperty('env') && project.getProperty('env') == 'dev')) {
 // Configuration for SQL tasks
 // https://docs.groovy-lang.org/latest/html/api/groovy/sql/Sql.html
 import groovy.sql.Sql
+import org.apache.fineract.gradle.db.TestDatabaseSettings
 
 project.ext.mysqlUser='root'
 project.ext.mysqlPassword='mysql'
-project.ext.pgUser='root'
-project.ext.pgPassword='postgres'
+
+// Server, port and credentials for the PostgreSQL tasks below. They default to the containerised
+// database the CI workflows start, and are overridable so the tenant registry and the per-tenant
+// databases can be created on a managed instance such as Aurora PostgreSQL.
+project.ext.pgSettings = TestDatabaseSettings.resolve('postgresql', project.properties, System.getenv())
 
 configurations {
     driver
@@ -200,7 +204,7 @@ tasks.register('dropDB') {
 tasks.register('createPGDB') {
     description = "Creates the PostgreSQL Database. Needs database name to be passed (like: -PdbName=someDBname)"
     doLast {
-        def sql = Sql.newInstance('jdbc:postgresql://localhost:5432/', pgUser, pgPassword, 'org.postgresql.Driver')
+        def sql = Sql.newInstance(pgSettings.serverJdbcUrl(), pgSettings.username, pgSettings.password, pgSettings.driverClassName)
         sql.execute('create database ' + "$dbName")
     }
 }
@@ -208,7 +212,7 @@ tasks.register('createPGDB') {
 tasks.register('dropPGDB') {
     description = "Drops the specified PostgreSQL database. The database name has to be passed (like: -PdbName=someDBname)"
     doLast {
-        def sql = Sql.newInstance('jdbc:postgresql://localhost:5432/', pgUser, pgPassword, 'org.postgresql.Driver')
+        def sql = Sql.newInstance(pgSettings.serverJdbcUrl(), pgSettings.username, pgSettings.password, pgSettings.driverClassName)
         sql.execute('DROP DATABASE ' + "$dbName")
     }
 }
@@ -303,20 +307,70 @@ jib {
     }
 }
 
+configurations {
+    liquibaseRuntime
+}
+
+dependencies {
+    liquibaseRuntime 'info.picocli:picocli:4.7.6'
+    liquibaseRuntime 'org.mariadb.jdbc:mariadb-java-client'
+    liquibaseRuntime 'org.postgresql:postgresql'
+}
+
+tasks.register('liquibaseTenantCommand', JavaExec) {
+    description = "Runs a Liquibase CLI command against a tenant database with the contexts the application uses " +
+            "(like: -PdbName=fineract_default -PliquibaseCommand='rollbackCount 5')"
+    classpath = configurations.liquibaseRuntime + sourceSets.main.runtimeClasspath
+    mainClass = 'liquibase.integration.commandline.Main'
+
+    doFirst {
+        def settings = TestDatabaseSettings.resolve(findProperty('dbType') as String, project.properties, System.getenv())
+        // The same contexts TenantDatabaseUpgradeService applies, otherwise Liquibase loads the changesets of
+        // every dialect and the checksums of the applied ones no longer match.
+        def contexts = [
+            'tenant_db',
+            'custom_changelog',
+            (findProperty('tenantIdentifier') ?: 'default').toString(),
+            settings.dbType == 'postgresql' ? 'postgresql' : 'mysql'
+        ]
+        if (findProperty('liquibaseInitialSwitch') == 'true') {
+            contexts += 'initial_switch'
+        }
+        // The changelog parameters the application exposes through spring.liquibase.parameters.
+        def changeLogParameters = [
+            'fineract.tenant.identifier'   : (findProperty('tenantIdentifier') ?: 'default').toString(),
+            'fineract.tenant.schema-name'  : "$dbName".toString(),
+            'fineract.tenant.host'         : settings.host,
+            'fineract.tenant.port'         : settings.port,
+            'fineract.tenant.username'     : settings.username,
+            'fineract.tenant.password'     : settings.password,
+            'fineract.tenant.rounding-mode': (findProperty('roundingMode') ?: '6').toString()
+        ]
+        args = [
+            '--changeLogFile=db/changelog/db.changelog-master.xml',
+            '--url=' + settings.jdbcUrl("$dbName"),
+            '--username=' + settings.username,
+            '--password=' + settings.password,
+            '--contexts=' + contexts.join(',')
+        ] + (findProperty('liquibaseCommand') ?: 'status').toString().tokenize(' ') +
+                changeLogParameters.collect { key, value -> "-D${key}=${value}".toString() }
+    }
+}
+
 tasks.register('migrateDatabase') {
     doFirst {
         println 'Executing liquibase database migration to version ' + "$dbVersion"
 
-        def dbUrl = 'jdbc:' + "$dbType" + '://' + "$dbHost" + ':' + "$dbPort" + '/' + "$dbName"
         def changeLogFilePath = 'fineract-provider/src/main/resources/db/changelog/tenant/upgrades/0000_upgrade_to_' + "$dbVersion" + '.xml'
+        def settings = TestDatabaseSettings.resolve(findProperty('dbType') as String, project.properties, System.getenv())
 
         liquibase {
             activities {
                 main {
                     changeLogFile changeLogFilePath
-                    url dbUrl
-                    username project.ext.mysqlUser
-                    password project.ext.mysqlPassword
+                    url settings.jdbcUrl("$dbName")
+                    username settings.username
+                    password settings.password
                 }
             }
         }
