@@ -274,10 +274,21 @@ jib {
 
     to {
         image = 'fineract'
+        // 'latest' is only ever produced for local (jibDockerBuild) images; the
+        // publishing workflow overrides jib.to.tags with immutable tags, and
+        // deployments resolve the image by digest.
         tags = [
             "${project.version}",
             'latest'
         ]
+    }
+
+    // Written by the build so the publishing workflow can record the image digest
+    // and deployments can resolve the image without going through a mutable tag.
+    outputPaths {
+        digest = "$buildDir/jib-image.digest"
+        imageId = "$buildDir/jib-image.id"
+        imageJson = "$buildDir/jib-image.json"
     }
 
     container {

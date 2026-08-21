@@ -1,0 +1,213 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+    Fineract delivery pipeline. GitHub Actions publishes the Jib image to ECR with
+    an immutable tag set and writes an artefact record (image digest + CycloneDX
+    SBOM) to S3; this pipeline deploys that digest to EKS.
+
+Parameters:
+    EcrRepositoryName:
+        Type: String
+        Default: fineract
+    ArtefactBucket:
+        Type: String
+        Description: S3 bucket holding artefact records and SBOMs.
+    EksClusterName:
+        Type: String
+    TargetRef:
+        Type: String
+        Default: develop
+        Description: Branch whose artefact record this pipeline deploys.
+    KubectlVersion:
+        Type: String
+        Default: v1.31.0
+    ConnectionArn:
+        Type: String
+        Description: CodeConnections ARN used to read the deploy manifests from GitHub.
+    RepositoryId:
+        Type: String
+        Default: COG-GTM/fineract-Core-Banking
+
+Resources:
+    EcrRepository:
+        Type: AWS::ECR::Repository
+        Properties:
+            RepositoryName: !Ref EcrRepositoryName
+            # Immutable tags: a published tag can never be repointed at other content.
+            ImageTagMutability: IMMUTABLE
+            ImageScanningConfiguration:
+                ScanOnPush: true
+            EncryptionConfiguration:
+                EncryptionType: AES256
+
+    PipelineArtifactBucket:
+        Type: AWS::S3::Bucket
+        Properties:
+            BucketEncryption:
+                ServerSideEncryptionConfiguration:
+                    - ServerSideEncryptionByDefault:
+                          SSEAlgorithm: AES256
+            PublicAccessBlockConfiguration:
+                BlockPublicAcls: true
+                BlockPublicPolicy: true
+                IgnorePublicAcls: true
+                RestrictPublicBuckets: true
+
+    DeployProjectRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: codebuild.amazonaws.com
+                      Action: sts:AssumeRole
+            Policies:
+                - PolicyName: fineract-deploy
+                  PolicyDocument:
+                      Version: '2012-10-17'
+                      Statement:
+                          - Effect: Allow
+                            Action:
+                                - logs:CreateLogGroup
+                                - logs:CreateLogStream
+                                - logs:PutLogEvents
+                            Resource: '*'
+                          - Effect: Allow
+                            Action:
+                                - s3:GetObject
+                                - s3:GetObjectVersion
+                                - s3:PutObject
+                            Resource:
+                                - !Sub 'arn:aws:s3:::${ArtefactBucket}/*'
+                                - !Sub '${PipelineArtifactBucket.Arn}/*'
+                          - Effect: Allow
+                            Action:
+                                - ecr:DescribeImages
+                                - ecr:BatchGetImage
+                                - ecr:GetAuthorizationToken
+                            Resource: '*'
+                          - Effect: Allow
+                            Action: eks:DescribeCluster
+                            Resource: !Sub 'arn:aws:eks:${AWS::Region}:${AWS::AccountId}:cluster/${EksClusterName}'
+
+    DeployProject:
+        Type: AWS::CodeBuild::Project
+        Properties:
+            Name: fineract-deploy
+            ServiceRole: !GetAtt DeployProjectRole.Arn
+            Artifacts:
+                Type: CODEPIPELINE
+            Environment:
+                Type: LINUX_CONTAINER
+                ComputeType: BUILD_GENERAL1_SMALL
+                Image: aws/codebuild/amazonlinux2-x86_64-standard:5.0
+                EnvironmentVariables:
+                    - Name: ARTEFACT_BUCKET
+                      Value: !Ref ArtefactBucket
+                    - Name: ECR_REPOSITORY
+                      Value: !Ref EcrRepositoryName
+                    - Name: EKS_CLUSTER_NAME
+                      Value: !Ref EksClusterName
+                    - Name: TARGET_REF
+                      Value: !Ref TargetRef
+                    - Name: KUBECTL_VERSION
+                      Value: !Ref KubectlVersion
+            Source:
+                Type: CODEPIPELINE
+                BuildSpec: deploy/aws/buildspec-deploy.yml
+
+    PipelineRole:
+        Type: AWS::IAM::Role
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: '2012-10-17'
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: codepipeline.amazonaws.com
+                      Action: sts:AssumeRole
+            Policies:
+                - PolicyName: fineract-pipeline
+                  PolicyDocument:
+                      Version: '2012-10-17'
+                      Statement:
+                          - Effect: Allow
+                            Action:
+                                - s3:GetObject
+                                - s3:GetObjectVersion
+                                - s3:PutObject
+                                - s3:GetBucketVersioning
+                            Resource:
+                                - !GetAtt PipelineArtifactBucket.Arn
+                                - !Sub '${PipelineArtifactBucket.Arn}/*'
+                          - Effect: Allow
+                            Action:
+                                - codebuild:BatchGetBuilds
+                                - codebuild:StartBuild
+                            Resource: !GetAtt DeployProject.Arn
+                          - Effect: Allow
+                            Action: codestar-connections:UseConnection
+                            Resource: !Ref ConnectionArn
+
+    Pipeline:
+        Type: AWS::CodePipeline::Pipeline
+        Properties:
+            Name: fineract-cd
+            RoleArn: !GetAtt PipelineRole.Arn
+            ArtifactStore:
+                Type: S3
+                Location: !Ref PipelineArtifactBucket
+            Stages:
+                - Name: Source
+                  Actions:
+                      - Name: Manifests
+                        ActionTypeId:
+                            Category: Source
+                            Owner: AWS
+                            Provider: CodeStarSourceConnection
+                            Version: '1'
+                        Configuration:
+                            ConnectionArn: !Ref ConnectionArn
+                            FullRepositoryId: !Ref RepositoryId
+                            BranchName: !Ref TargetRef
+                            DetectChanges: false
+                        OutputArtifacts:
+                            - Name: SourceArtifact
+                - Name: Deploy
+                  Actions:
+                      - Name: DeployByDigest
+                        ActionTypeId:
+                            Category: Build
+                            Owner: AWS
+                            Provider: CodeBuild
+                            Version: '1'
+                        Configuration:
+                            ProjectName: !Ref DeployProject
+                        InputArtifacts:
+                            - Name: SourceArtifact
+                        OutputArtifacts:
+                            - Name: DeployArtifact
+
+Outputs:
+    PipelineName:
+        Value: !Ref Pipeline
+    EcrRepositoryUri:
+        Value: !GetAtt EcrRepository.RepositoryUri

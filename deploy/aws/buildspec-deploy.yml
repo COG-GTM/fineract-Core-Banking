@@ -1,0 +1,53 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+# Deploy stage of the Fineract CD pipeline. The pipeline never resolves a tag:
+# it reads the artefact record published by the build and applies the manifest
+# with the image pinned to that record's digest.
+
+version: 0.2
+
+env:
+    variables:
+        MANIFEST: kubernetes/fineract-server-deployment.yml
+    exported-variables:
+        - FINERACT_IMAGE
+
+phases:
+    install:
+        commands:
+            - curl -sSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+            - chmod +x /usr/local/bin/kubectl
+    pre_build:
+        commands:
+            - aws s3 cp "s3://${ARTEFACT_BUCKET}/fineract/${TARGET_REF}/artefact-record.json" artefact-record.json
+            - FINERACT_IMAGE="$(jq -r '.image' artefact-record.json)"
+            - echo "Deploying $FINERACT_IMAGE"
+            # Fail the deployment if the digest referenced by the artefact record
+            # is no longer present in ECR.
+            - aws ecr describe-images --repository-name "${ECR_REPOSITORY}" --image-ids imageDigest="$(jq -r '.digest' artefact-record.json)" > /dev/null
+            - ./deploy/scripts/render-image-digest.sh artefact-record.json "$MANIFEST" rendered-deployment.yml
+    build:
+        commands:
+            - aws eks update-kubeconfig --name "${EKS_CLUSTER_NAME}" --region "${AWS_REGION}"
+            - kubectl apply -f rendered-deployment.yml
+            - kubectl rollout status deployment/fineract-server --timeout=10m
+
+artifacts:
+    files:
+        - rendered-deployment.yml
+        - artefact-record.json
