@@ -37,7 +37,6 @@ import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDoma
 import org.apache.fineract.infrastructure.core.api.JsonQuery;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
 import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
-import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.organisation.monetary.data.CurrencyData;
@@ -321,8 +320,6 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
 
         final Long calendarId = query.longValueOfParameterNamed(calendarIdParamName);
         final LocalDate transactionDate = query.localDateValueOfParameterNamed(transactionDateParamName);
-        final String transactionDateStr = DateUtils.DEFAULT_DATE_FORMATTER.format(transactionDate);
-
         final Calendar calendar = this.calendarRepositoryWrapper.findOneWithNotFoundDetection(calendarId);
         // check if transaction against calendar effective from date
 
@@ -358,7 +355,7 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
 
         final JLGCollectionSheetFaltDataMapper mapper = new JLGCollectionSheetFaltDataMapper(sqlGenerator);
 
-        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDateStr)
+        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDate)
                 .addValue("groupId", group.getId()).addValue("officeHierarchy", officeHierarchy)
                 .addValue("entityTypeId", entityType.getValue());
 
@@ -456,13 +453,11 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
         final CenterData center = this.centerReadPlatformService.retrieveOne(centerId);
 
         final LocalDate transactionDate = query.localDateValueOfParameterNamed(transactionDateParamName);
-        final String dueDateStr = DateUtils.DEFAULT_DATE_FORMATTER.format(transactionDate);
-
         final JLGCollectionSheetFaltDataMapper mapper = new JLGCollectionSheetFaltDataMapper(sqlGenerator);
 
         StringBuilder sql = new StringBuilder(mapper.collectionSheetSchema(true));
 
-        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", dueDateStr)
+        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDate)
                 .addValue("centerId", center.getId()).addValue("officeHierarchy", officeHierarchy)
                 .addValue("entityTypeId", CalendarEntityType.CENTERS.getValue());
 
@@ -672,8 +667,6 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
         this.collectionSheetGenerateCommandFromApiJsonDeserializer.validateForGenerateCollectionSheetOfIndividuals(query.json());
 
         final LocalDate transactionDate = query.localDateValueOfParameterNamed(transactionDateParamName);
-        final String transactionDateStr = DateUtils.DEFAULT_DATE_FORMATTER.format(transactionDate);
-
         final AppUser currentUser = this.context.authenticatedUser();
         final String hierarchy = currentUser.getOffice().getHierarchy();
         final String officeHierarchy = hierarchy + "%";
@@ -686,7 +679,7 @@ public class CollectionSheetReadPlatformServiceImpl implements CollectionSheetRe
         final IndividualCollectionSheetFaltDataMapper mapper = new IndividualCollectionSheetFaltDataMapper(checkForOfficeId,
                 checkForStaffId, sqlGenerator);
 
-        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDateStr)
+        final SqlParameterSource namedParameters = new MapSqlParameterSource().addValue("dueDate", transactionDate)
                 .addValue("officeHierarchy", officeHierarchy);
 
         if (checkForOfficeId) {
