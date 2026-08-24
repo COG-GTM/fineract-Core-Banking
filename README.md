@@ -33,6 +33,9 @@ REQUIREMENTS
 * `MariaDB >= 11.5.2` or `PostgreSQL >= 18.0`
 * `Java >= 21` (Azul Zulu JVM is tested by our CI on GitHub Actions)
 
+The AWS migration target is Amazon Aurora PostgreSQL, as recorded in
+[`Q-DB-01`](docs/migration/decisions/Q-DB-01-aurora-postgresql.md).
+
 Tomcat (min. v10) is only required, if you wish to deploy the Fineract WAR to a separate external servlet container.  You do not need to install Tomcat to run Fineract. We recommend the use of the self-contained JAR, which transparently embeds a servlet container using Spring Boot.
 
 
