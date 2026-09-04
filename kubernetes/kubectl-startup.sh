@@ -20,8 +20,16 @@
 
 set -e
 
+: "${FINERACT_IRSA_ROLE_ARN:?FINERACT_IRSA_ROLE_ARN must be set}"
+: "${AWS_REGION:?AWS_REGION must be set}"
+FINERACT_DB_APP_SECRET_NAME="${FINERACT_DB_APP_SECRET_NAME:-fineract/db/app}"
+FINERACT_DB_ROOT_SECRET_NAME="${FINERACT_DB_ROOT_SECRET_NAME:-fineract/db/root}"
+export FINERACT_IRSA_ROLE_ARN AWS_REGION FINERACT_DB_APP_SECRET_NAME FINERACT_DB_ROOT_SECRET_NAME
+
 echo "Setting up Fineract service configuration..."
-kubectl create secret generic fineract-tenants-db-secret --from-literal=username=root --from-literal=password=$(head /dev/urandom | LC_CTYPE=C tr -dc A-Za-z0-9 | head -c 16) 2>/dev/null || echo "Secret already exists, skipping..."
+envsubst < fineract-serviceaccount.yml | kubectl apply -f -
+envsubst < fineract-external-secrets.yml | kubectl apply -f -
+kubectl wait --for=condition=Ready externalsecret/fineract-tenants-db-secret externalsecret/fineractmysql-root-secret --timeout=120s
 kubectl apply -f fineractmysql-configmap.yml
 
 echo
