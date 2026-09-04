@@ -24,10 +24,17 @@ metadata:
   labels:
     app: fineract-server
 data:
-  init.sql: |
+  init.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    mariadb -uroot -p"${MARIADB_ROOT_PASSWORD}" <<-EOSQL
     # create databases
     CREATE DATABASE IF NOT EXISTS `fineract_tenants`;
     CREATE DATABASE IF NOT EXISTS `fineract_default`;
 
-    # create root user and grant rights
-    GRANT ALL ON *.* TO 'root'@'%';
+    # create application user
+    CREATE USER IF NOT EXISTS '${FINERACT_DB_USERNAME}'@'%' IDENTIFIED BY '${FINERACT_DB_PASSWORD}';
+    GRANT ALL PRIVILEGES ON `fineract\_%`.* TO '${FINERACT_DB_USERNAME}'@'%';
+    FLUSH PRIVILEGES;
+    EOSQL

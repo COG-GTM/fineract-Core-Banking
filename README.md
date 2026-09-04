@@ -181,11 +181,22 @@ You can follow [this](https://cwiki.apache.org/confluence/display/FINERACT/Insta
 
 Now e.g. from your Google Cloud shell, run the following commands:
 
+Prerequisites (EKS):
+- External Secrets Operator must be installed in the cluster.
+- Create `fineract/db/app` in Secrets Manager with `username` and `password` JSON keys.
+- Create `fineract/db/root` in Secrets Manager with a `password` JSON key.
+- Configure an IAM role with `secretsmanager:GetSecretValue` and `secretsmanager:DescribeSecret`
+  for those secrets, trusted by the cluster OIDC provider for
+  `system:serviceaccount:default:fineract-server`.
+- Export `FINERACT_IRSA_ROLE_ARN` and `AWS_REGION` before running the script.
+
 ```bash
 git clone https://github.com/apache/fineract.git
 cd fineract/kubernetes
 ./kubectl-startup.sh
 ```
+
+The Minikube flow also requires External Secrets Operator and AWS credentials.
 
 To shutdown and reset your Cluster, run:
 ```bash

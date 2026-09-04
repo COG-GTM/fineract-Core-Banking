@@ -99,11 +99,21 @@ spec:
             - name: MARIADB_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
+                  name: fineractmysql-root-secret
+                  key: password
+            - name: FINERACT_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: fineract-tenants-db-secret
+                  key: username
+            - name: FINERACT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
                   name: fineract-tenants-db-secret
                   key: password
           livenessProbe:
             exec:
-              command: ["sh","-c","mariadb -uroot -p${MARIADB_ROOT_PASSWORD} -e 'SELECT 1'"]
+              command: ["sh","-c","mariadb-admin ping -uroot -p\"${MARIADB_ROOT_PASSWORD}\""]
             failureThreshold: 10
             timeoutSeconds: 10
           readinessProbe:
@@ -111,7 +121,7 @@ spec:
               command:
                 - sh
                 - -c
-                - mariadb -uroot -p${MARIADB_ROOT_PASSWORD} -e 'SELECT 1'
+                - mariadb-admin ping -uroot -p"${MARIADB_ROOT_PASSWORD}"
             failureThreshold: 10
             initialDelaySeconds: 5
             periodSeconds: 5
