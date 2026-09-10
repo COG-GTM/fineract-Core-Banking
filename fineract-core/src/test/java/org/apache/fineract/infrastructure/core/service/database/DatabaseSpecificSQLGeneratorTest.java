@@ -75,7 +75,6 @@ public class DatabaseSpecificSQLGeneratorTest {
     public void testCastCharKeepsMySQLSyntax() {
         Mockito.when(databaseTypeResolver.isMySQL()).thenReturn(true);
 
-        Assertions.assertEquals("CAST(code.id AS CHAR) COLLATE utf8mb4_unicode_ci",
-                databaseSpecificSQLGenerator.castChar("code.id"));
+        Assertions.assertEquals("CAST(code.id AS CHAR) COLLATE utf8mb4_unicode_ci", databaseSpecificSQLGenerator.castChar("code.id"));
     }
 }
