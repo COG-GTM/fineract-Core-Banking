@@ -164,7 +164,7 @@ public class DatabaseSpecificSQLGenerator {
         if (databaseTypeResolver.isMySQL()) {
             return format("CAST(%s AS CHAR) COLLATE utf8mb4_unicode_ci", sql);
         } else if (databaseTypeResolver.isPostgreSQL()) {
-            return format("%s::CHAR", sql);
+            return format("%s::VARCHAR", sql);
         } else {
             throw new IllegalStateException(
                     "Database type is not supported for casting to character " + databaseTypeResolver.databaseType());
