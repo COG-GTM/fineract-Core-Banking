@@ -105,8 +105,7 @@ public class CenterReadPlatformServiceImpl implements CenterReadPlatformService 
             extraCriteria.addNonNullCriteria("g.office_id = ", searchCriteria.getOfficeId());
             extraCriteria.addNonNullCriteria("g.external_id = ", searchCriteria.getExternalId());
             final String name = searchCriteria.getName();
-            extraCriteria.addNonNullCriteria("lower(g.display_name) like ",
-                    name == null ? null : name.toLowerCase(Locale.ROOT));
+            extraCriteria.addNonNullCriteria("lower(g.display_name) like ", name == null ? null : name.toLowerCase(Locale.ROOT));
             extraCriteria.addNonNullCriteria(" o.hierarchy like ", searchCriteria.getHierarchy());
             extraCriteria.addNonNullCriteria(" g.staff_id = ", searchCriteria.getStaffId());
         }
