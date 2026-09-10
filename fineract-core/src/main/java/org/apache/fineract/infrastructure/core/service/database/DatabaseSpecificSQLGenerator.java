@@ -137,8 +137,7 @@ public class DatabaseSpecificSQLGenerator {
                 depth++;
             } else if (c == ')') {
                 depth--;
-            } else if (depth == 0 && (c == 'l' || c == 'L' || c == 'o' || c == 'O')
-                    && (i == 0 || !Character.isLetterOrDigit(sql.charAt(i - 1)) && sql.charAt(i - 1) != '_')) {
+            } else if (depth == 0 && (c == 'l' || c == 'L' || c == 'o' || c == 'O') && isWordStart(sql, i)) {
                 Matcher m = PAGINATION_PATTERN.matcher(sql).region(i, sql.length());
                 if (m.lookingAt()) {
                     i = m.end();
@@ -149,6 +148,14 @@ public class DatabaseSpecificSQLGenerator {
             i++;
         }
         return result.toString().trim();
+    }
+
+    private static boolean isWordStart(String sql, int i) {
+        if (i == 0) {
+            return true;
+        }
+        char previous = sql.charAt(i - 1);
+        return !Character.isLetterOrDigit(previous) && previous != '_';
     }
 
     public String currentBusinessDate() {
