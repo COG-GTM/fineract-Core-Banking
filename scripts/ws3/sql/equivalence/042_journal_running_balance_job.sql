@@ -1,0 +1,46 @@
+--
+-- Licensed to the Apache Software Foundation (ASF) under one
+-- or more contributor license agreements. See the NOTICE file
+-- distributed with this work for additional information
+-- regarding copyright ownership. The ASF licenses this file
+-- to you under the Apache License, Version 2.0 (the
+-- "License"); you may not use this file except in compliance
+-- with the License. You may obtain a copy of the License at
+--
+-- http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing,
+-- software distributed under the License is distributed on an
+-- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+-- KIND, either express or implied. See the License for the
+-- specific language governing permissions and limitations
+-- under the License.
+--
+-- name: journal_running_balance_job
+-- description: Verbatim organisation running-balance query from
+--   fineract-provider/src/main/java/org/apache/fineract/accounting/journalentry/service/JournalEntryRunningBalanceUpdateServiceImpl.java:110-113,
+--   the query that drives the UPDATE_RUNNING_BALANCE accounting job. The bound
+--   date parameter is inlined as 2023-06-01 and {limit} is rendered by the
+--   harness exactly as DatabaseSpecificSQLGenerator.limit(10000, 0) does per
+--   engine (MySQL "LIMIT 0,10000", PostgreSQL "LIMIT 10000 OFFSET 0").
+--   This is the GROUP BY strictness case: the projection lists columns that are
+--   not in the GROUP BY, which PostgreSQL only accepts because je.id is the
+--   primary key of acc_gl_journal_entry and the other columns are functionally
+--   dependent on it. Any change that groups by a non-key column, or projects a
+--   column of a joined table, will fail on PostgreSQL and silently pick an
+--   arbitrary row on MariaDB.
+--   The harness compares this case order-insensitively: ORDER BY entry_date has
+--   ties in the seed data and the two engines break them differently
+--   (MariaDB returned accounts 1,3,1,2 where PostgreSQL returned 3,1,2,1). The
+--   call site folds the result into a Map keyed by account_id and keeps the
+--   first row per account, and the two inner joins reduce the result to one row
+--   per account, so tie order is not observable today. It becomes observable
+--   the moment that query is changed to return more than one row per account.
+-- class: financial-balance
+-- compare: unordered
+-- expect: identical
+--
+select je.organization_running_balance as runningBalance, je.account_id as accountId from acc_gl_journal_entry je
+ inner join (select max(id) as id from acc_gl_journal_entry where entry_date < DATE '2023-06-01' group by account_id,entry_date) je2 ON je2.id = je.id
+ inner join (select max(entry_date) as date from acc_gl_journal_entry where entry_date < DATE '2023-06-01' group by account_id) je3 ON je.entry_date = je3.date
+ group by je.id order by je.entry_date DESC {limit}

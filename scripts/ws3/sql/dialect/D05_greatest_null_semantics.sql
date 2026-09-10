@@ -1,0 +1,30 @@
+--
+-- Licensed to the Apache Software Foundation (ASF) under one
+-- or more contributor license agreements. See the NOTICE file
+-- distributed with this work for additional information
+-- regarding copyright ownership. The ASF licenses this file
+-- to you under the Apache License, Version 2.0 (the
+-- "License"); you may not use this file except in compliance
+-- with the License. You may obtain a copy of the License at
+--
+-- http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing,
+-- software distributed under the License is distributed on an
+-- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+-- KIND, either express or implied. See the License for the
+-- specific language governing permissions and limitations
+-- under the License.
+--
+-- name: D05_greatest_null_semantics
+-- source: fineract-provider/src/main/java/org/apache/fineract/portfolio/loanaccount/service/LoanReadPlatformServiceImpl.java:2127 (as of 8c187f9d1)
+-- description: GREATEST() executes on both engines but does not mean the same
+--   thing. MySQL/MariaDB return NULL if any argument is NULL; PostgreSQL
+--   ignores NULL arguments and returns the largest non-NULL value. The
+--   statement therefore succeeds everywhere and silently returns different
+--   data, which is why it is classified financial-impact rather than a syntax
+--   defect. Compare with the equivalence case loan_installment_due.
+-- expect: mysql=pass postgres=pass
+-- known-divergence: yes
+--
+SELECT GREATEST(NULL, DATE '2023-08-01') AS greatest_with_null

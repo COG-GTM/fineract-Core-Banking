@@ -1,0 +1,30 @@
+--
+-- Licensed to the Apache Software Foundation (ASF) under one
+-- or more contributor license agreements. See the NOTICE file
+-- distributed with this work for additional information
+-- regarding copyright ownership. The ASF licenses this file
+-- to you under the Apache License, Version 2.0 (the
+-- "License"); you may not use this file except in compliance
+-- with the License. You may obtain a copy of the License at
+--
+-- http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing,
+-- software distributed under the License is distributed on an
+-- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+-- KIND, either express or implied. See the License for the
+-- specific language governing permissions and limitations
+-- under the License.
+--
+-- name: D06_concat_operator
+-- source: audit control case (no shipped call site relies on ||)
+-- description: The || operator is string concatenation in PostgreSQL but
+--   logical OR in MySQL/MariaDB unless PIPES_AS_CONCAT is enabled, in which
+--   case it returns 1 (true) for two non-numeric strings rather than the
+--   concatenated value. Kept as a guard: if a future change introduces || into
+--   a shared SQL string, this case documents the divergence the audit ruled
+--   out for the current tree.
+-- expect: mysql=pass postgres=pass
+-- known-divergence: yes
+--
+SELECT ('a' || 'b') AS concatenated

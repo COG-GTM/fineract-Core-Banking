@@ -1,0 +1,30 @@
+--
+-- Licensed to the Apache Software Foundation (ASF) under one
+-- or more contributor license agreements. See the NOTICE file
+-- distributed with this work for additional information
+-- regarding copyright ownership. The ASF licenses this file
+-- to you under the Apache License, Version 2.0 (the
+-- "License"); you may not use this file except in compliance
+-- with the License. You may obtain a copy of the License at
+--
+-- http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing,
+-- software distributed under the License is distributed on an
+-- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+-- KIND, either express or implied. See the License for the
+-- specific language governing permissions and limitations
+-- under the License.
+--
+-- name: D04_fixed_drop_constraint
+-- source: fineract-provider/src/main/java/org/apache/fineract/infrastructure/dataqueries/service/DatatableWriteServiceImpl.java:799,810 (the constraint-approach branch, which is already portable)
+-- description: ALTER TABLE ... DROP CONSTRAINT is accepted by PostgreSQL and by
+--   MariaDB 10.2+, and is what the constraint-approach code path already emits.
+--   It is the portable replacement for DROP FOREIGN KEY.
+-- expect: mysql=pass postgres=pass
+-- setup: CREATE TABLE ws3_d04f_parent (id BIGINT NOT NULL, PRIMARY KEY (id))
+-- setup: CREATE TABLE ws3_d04f_child (id BIGINT NOT NULL, parent_id BIGINT, PRIMARY KEY (id), CONSTRAINT fk_ws3_d04f FOREIGN KEY (parent_id) REFERENCES ws3_d04f_parent (id))
+-- teardown: DROP TABLE ws3_d04f_child
+-- teardown: DROP TABLE ws3_d04f_parent
+--
+ALTER TABLE ws3_d04f_child DROP CONSTRAINT fk_ws3_d04f

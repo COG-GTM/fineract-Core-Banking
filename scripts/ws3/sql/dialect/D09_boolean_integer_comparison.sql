@@ -1,0 +1,32 @@
+--
+-- Licensed to the Apache Software Foundation (ASF) under one
+-- or more contributor license agreements. See the NOTICE file
+-- distributed with this work for additional information
+-- regarding copyright ownership. The ASF licenses this file
+-- to you under the Apache License, Version 2.0 (the
+-- "License"); you may not use this file except in compliance
+-- with the License. You may obtain a copy of the License at
+--
+-- http://www.apache.org/licenses/LICENSE-2.0
+--
+-- Unless required by applicable law or agreed to in writing,
+-- software distributed under the License is distributed on an
+-- "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+-- KIND, either express or implied. See the License for the
+-- specific language governing permissions and limitations
+-- under the License.
+--
+-- name: D09_boolean_integer_comparison
+-- source: fineract-provider/src/main/java/org/apache/fineract/portfolio/collectionsheet/service/CollectionSheetReadPlatformServiceImpl.java:244,746,830
+-- description: The collection-sheet queries compare boolean columns to the
+--   integer literal 0 ("ls.completed_derived = 0",
+--   "mss.completed_derived = 0"). m_loan_repayment_schedule.completed_derived
+--   is declared boolean in the Liquibase schema
+--   (fineract-provider/src/main/resources/db/changelog/tenant/parts/0001_initial_schema.xml:2533),
+--   which MariaDB stores as tinyint(1) and happily compares to 0. PostgreSQL
+--   has no implicit boolean/integer cast and rejects the predicate.
+-- expect: mysql=pass postgres=fail
+--
+SELECT count(*) AS not_completed
+  FROM m_loan_repayment_schedule ls
+ WHERE ls.completed_derived = 0
