@@ -76,8 +76,8 @@ class EmailReadPlatformServiceImplTest {
         verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), any(Object[].class));
 
         String executedSql = sqlCaptor.getValue();
-        // Verify MySQL specific syntax (LIMIT 10)
-        assertTrue(executedSql.contains("LIMIT 0,10"), "SQL should contain MySQL LIMIT clause: " + executedSql);
+        // Verify standard LIMIT/OFFSET syntax (LIMIT 10)
+        assertTrue(executedSql.contains("LIMIT 10 OFFSET 0"), "SQL should contain MySQL LIMIT clause: " + executedSql);
     }
 
     @Test
@@ -134,8 +134,8 @@ class EmailReadPlatformServiceImplTest {
         verify(jdbcTemplate).query(sqlCaptor.capture(), any(RowMapper.class), any(Object[].class));
 
         String executedSql = sqlCaptor.getValue();
-        // Verify MySQL specific syntax (LIMIT 1)
-        assertTrue(executedSql.contains("LIMIT 0,1"), "SQL should contain MySQL LIMIT 1 clause");
+        // Verify standard LIMIT/OFFSET syntax (LIMIT 1)
+        assertTrue(executedSql.contains("LIMIT 1 OFFSET 0"), "SQL should contain MySQL LIMIT 1 clause");
     }
 
     @Test

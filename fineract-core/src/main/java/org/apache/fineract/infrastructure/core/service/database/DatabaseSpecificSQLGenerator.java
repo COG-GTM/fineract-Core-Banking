@@ -26,6 +26,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
@@ -45,6 +47,8 @@ public class DatabaseSpecificSQLGenerator {
     private final RoutingDataSource dataSource;
     public static final String SELECT_CLAUSE = "SELECT %s";
     public static final int IN_CLAUSE_MAX_PARAMS = 10_000;
+    private static final Pattern PAGINATION_PATTERN = Pattern.compile("LIMIT\\s+\\d+(\\s*,\\s*\\d+)?\\b|OFFSET\\s+\\d+\\b",
+            Pattern.CASE_INSENSITIVE);
 
     public DatabaseType getDialect() {
         return databaseTypeResolver.databaseType();
@@ -55,8 +59,9 @@ public class DatabaseSpecificSQLGenerator {
             return format("`%s`", arg);
         } else if (databaseTypeResolver.isPostgreSQL()) {
             return format("\"%s\"", arg);
+        } else {
+            throw new IllegalStateException("Database type is not supported for escape " + databaseTypeResolver.databaseType());
         }
-        return arg;
     }
 
     public String formatValue(JdbcJavaType columnType, String value) {
@@ -78,10 +83,12 @@ public class DatabaseSpecificSQLGenerator {
         return limit(count, 0);
     }
 
+    /**
+     * {@code LIMIT count OFFSET offset} is accepted by MySQL, MariaDB and PostgreSQL, so the same form is emitted for
+     * every supported dialect.
+     */
     public String limit(int count, int offset) {
-        if (databaseTypeResolver.isMySQL()) {
-            return format("LIMIT %s,%s", offset, count);
-        } else if (databaseTypeResolver.isPostgreSQL()) {
+        if (databaseTypeResolver.isMySQL() || databaseTypeResolver.isPostgreSQL()) {
             return format("LIMIT %s OFFSET %s", count, offset);
         } else {
             throw new IllegalStateException("Database type is not supported for limit " + databaseTypeResolver.databaseType());
@@ -105,9 +112,50 @@ public class DatabaseSpecificSQLGenerator {
     }
 
     public String countQueryResult(@NonNull String sql) {
-        // Needs to remove the limit and offset
-        sql = sql.replaceAll("LIMIT \\d+", "").replaceAll("OFFSET \\d+", "").trim();
-        return format("SELECT COUNT(*) FROM (%s) AS temp", sql);
+        return format("SELECT COUNT(*) FROM (%s) AS temp", stripTopLevelPagination(sql));
+    }
+
+    /**
+     * Removes the {@code LIMIT}/{@code OFFSET} clauses of the outermost statement only (any case, including the MySQL
+     * {@code LIMIT offset,count} form). Clauses inside parentheses, string literals or quoted identifiers are left
+     * untouched so a limited derived table keeps its row cap in the count query.
+     */
+    static String stripTopLevelPagination(String sql) {
+        StringBuilder result = new StringBuilder(sql.length());
+        int depth = 0;
+        char quote = 0;
+        int i = 0;
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            if (quote != 0) {
+                if (c == quote) {
+                    quote = 0;
+                }
+            } else if (c == '\'' || c == '"' || c == '`') {
+                quote = c;
+            } else if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                depth--;
+            } else if (depth == 0 && (c == 'l' || c == 'L' || c == 'o' || c == 'O') && isWordStart(sql, i)) {
+                Matcher m = PAGINATION_PATTERN.matcher(sql).region(i, sql.length());
+                if (m.lookingAt()) {
+                    i = m.end();
+                    continue;
+                }
+            }
+            result.append(c);
+            i++;
+        }
+        return result.toString().trim();
+    }
+
+    private static boolean isWordStart(String sql, int i) {
+        if (i == 0) {
+            return true;
+        }
+        char previous = sql.charAt(i - 1);
+        return !Character.isLetterOrDigit(previous) && previous != '_';
     }
 
     public String currentBusinessDate() {
