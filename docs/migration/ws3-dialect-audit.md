@@ -199,3 +199,6 @@ scripts/ws3/run-equivalence.sh
 `scripts/ws3/dialect_scan.py` needs only a checkout; `run-equivalence.sh` needs a MariaDB and a
 PostgreSQL endpoint (defaults match the CI service containers) and is described in
 `scripts/ws3/README.md`.
+
+Batch 2 string-function, casting, concatenation, and `LIKE` findings are documented in
+[`ws3-dialect-audit-batch2.md`](ws3-dialect-audit-batch2.md).
