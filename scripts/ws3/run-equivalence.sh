@@ -50,7 +50,7 @@ HARNESS_DB="${HARNESS_DB:-fineract_ws3_equivalence}"
 echo "Creating ${HARNESS_DB} on MariaDB ${SOURCE_HOST}:${SOURCE_PORT} and PostgreSQL ${TARGET_HOST}:${TARGET_PORT}"
 
 mysql --host="${SOURCE_HOST}" --port="${SOURCE_PORT}" --user="${SOURCE_USER}" --password="${SOURCE_PASSWORD}" \
-    --execute="DROP DATABASE IF EXISTS ${HARNESS_DB}; CREATE DATABASE ${HARNESS_DB};"
+    --execute="DROP DATABASE IF EXISTS ${HARNESS_DB}; CREATE DATABASE ${HARNESS_DB} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 PGPASSWORD="${TARGET_PASSWORD}" psql --host="${TARGET_HOST}" --port="${TARGET_PORT}" --username="${TARGET_USER}" \
     --dbname=postgres --no-psqlrc --quiet --set=ON_ERROR_STOP=1 \
