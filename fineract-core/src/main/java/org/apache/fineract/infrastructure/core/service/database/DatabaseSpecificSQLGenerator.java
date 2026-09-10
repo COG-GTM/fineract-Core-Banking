@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
@@ -45,6 +46,8 @@ public class DatabaseSpecificSQLGenerator {
     private final RoutingDataSource dataSource;
     public static final String SELECT_CLAUSE = "SELECT %s";
     public static final int IN_CLAUSE_MAX_PARAMS = 10_000;
+    private static final Pattern LIMIT_PATTERN = Pattern.compile("\\bLIMIT\\s+\\d+(\\s*,\\s*\\d+)?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern OFFSET_PATTERN = Pattern.compile("\\bOFFSET\\s+\\d+", Pattern.CASE_INSENSITIVE);
 
     public DatabaseType getDialect() {
         return databaseTypeResolver.databaseType();
@@ -55,8 +58,9 @@ public class DatabaseSpecificSQLGenerator {
             return format("`%s`", arg);
         } else if (databaseTypeResolver.isPostgreSQL()) {
             return format("\"%s\"", arg);
+        } else {
+            throw new IllegalStateException("Database type is not supported for escape " + databaseTypeResolver.databaseType());
         }
-        return arg;
     }
 
     public String formatValue(JdbcJavaType columnType, String value) {
@@ -78,10 +82,12 @@ public class DatabaseSpecificSQLGenerator {
         return limit(count, 0);
     }
 
+    /**
+     * {@code LIMIT count OFFSET offset} is accepted by MySQL, MariaDB and PostgreSQL, so the same form is emitted for
+     * every supported dialect.
+     */
     public String limit(int count, int offset) {
-        if (databaseTypeResolver.isMySQL()) {
-            return format("LIMIT %s,%s", offset, count);
-        } else if (databaseTypeResolver.isPostgreSQL()) {
+        if (databaseTypeResolver.isMySQL() || databaseTypeResolver.isPostgreSQL()) {
             return format("LIMIT %s OFFSET %s", count, offset);
         } else {
             throw new IllegalStateException("Database type is not supported for limit " + databaseTypeResolver.databaseType());
@@ -105,8 +111,9 @@ public class DatabaseSpecificSQLGenerator {
     }
 
     public String countQueryResult(@NonNull String sql) {
-        // Needs to remove the limit and offset
-        sql = sql.replaceAll("LIMIT \\d+", "").replaceAll("OFFSET \\d+", "").trim();
+        // Needs to remove the limit and offset (any case, including the MySQL "LIMIT offset,count" form)
+        sql = LIMIT_PATTERN.matcher(sql).replaceAll("").trim();
+        sql = OFFSET_PATTERN.matcher(sql).replaceAll("").trim();
         return format("SELECT COUNT(*) FROM (%s) AS temp", sql);
     }
 
