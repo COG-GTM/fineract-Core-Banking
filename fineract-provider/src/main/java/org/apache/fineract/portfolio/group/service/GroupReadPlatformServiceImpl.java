@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.codes.data.CodeValueData;
@@ -208,7 +209,7 @@ public class GroupReadPlatformServiceImpl implements GroupReadPlatformService {
 
         final String name = searchCriteria.getName();
         if (name != null) {
-            extraCriteria.addNonNullCriteria("g.display_name like", "%" + name + "%");
+            extraCriteria.addNonNullCriteria("lower(g.display_name) like", "%" + name.toLowerCase(Locale.ROOT) + "%");
         }
 
         final String hierarchy = searchCriteria.getHierarchy();

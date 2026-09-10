@@ -143,6 +143,17 @@ class SQLBuilderTest {
     }
 
     @Test
+    void testAddCriteriaSupportsLowerFunction() {
+        // given
+        SQLBuilder builder = new SQLBuilder();
+        // when
+        builder.addCriteria("lower(name) like", "%john%");
+        // then
+        Assertions.assertEquals(" WHERE  lower(name) like ?", builder.getSQLTemplate());
+        Assertions.assertArrayEquals(new Object[] { "%john%" }, builder.getArguments());
+    }
+
+    @Test
     void testGetSQLTemplateEmptyWhenNoCriteria() {
         // given
         SQLBuilder builder = new SQLBuilder();

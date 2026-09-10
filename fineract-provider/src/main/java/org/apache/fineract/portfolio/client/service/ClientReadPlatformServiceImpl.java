@@ -161,14 +161,14 @@ public class ClientReadPlatformServiceImpl implements ClientReadPlatformService 
 
         if (externalId != null) {
             paramList.add(externalId);
-            extraCriteria += " and c.external_id like ? ";
+            extraCriteria += " and lower(c.external_id) like lower(?) ";
         }
 
         if (displayName != null) {
             // extraCriteria += " and concatcoalesce(c.firstname, ''),
             // if(c.firstname > '',' ', '') , coalesce(c.lastname, '')) like "
             paramList.add("%" + displayName + "%");
-            extraCriteria += " and c.display_name like ? ";
+            extraCriteria += " and lower(c.display_name) like lower(?) ";
         }
 
         if (status != null) {
@@ -178,12 +178,12 @@ public class ClientReadPlatformServiceImpl implements ClientReadPlatformService 
 
         if (firstname != null) {
             paramList.add(firstname);
-            extraCriteria += " and c.firstname like ? ";
+            extraCriteria += " and lower(c.firstname) like lower(?) ";
         }
 
         if (lastname != null) {
             paramList.add(lastname);
-            extraCriteria += " and c.lastname like ? ";
+            extraCriteria += " and lower(c.lastname) like lower(?) ";
         }
 
         if (searchParameters.hasHierarchy()) {
@@ -545,7 +545,7 @@ public class ClientReadPlatformServiceImpl implements ClientReadPlatformService 
             return "c.id as id, c.account_no as accountNo, c.firstname as firstname, c.middlename as middlename, c.lastname as lastname, "
                     + "c.fullname as fullname, c.display_name as displayName," + "c.office_id as officeId, o.name as officeName "
                     + " from m_client c, m_office o, m_client_identifier ci " + "where o.id = c.office_id and c.id=ci.client_id "
-                    + "and ci.document_type_id= ? and ci.document_key like ?";
+                    + "and ci.document_type_id= ? and lower(ci.document_key) like lower(?)";
         }
 
         @Override

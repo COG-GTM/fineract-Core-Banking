@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.apache.fineract.infrastructure.codes.data.CodeValueData;
@@ -103,7 +104,9 @@ public class CenterReadPlatformServiceImpl implements CenterReadPlatformService 
         if (searchCriteria != null) {
             extraCriteria.addNonNullCriteria("g.office_id = ", searchCriteria.getOfficeId());
             extraCriteria.addNonNullCriteria("g.external_id = ", searchCriteria.getExternalId());
-            extraCriteria.addNonNullCriteria("g.display_name like ", searchCriteria.getName());
+            final String name = searchCriteria.getName();
+            extraCriteria.addNonNullCriteria("lower(g.display_name) like ",
+                    name == null ? null : name.toLowerCase(Locale.ROOT));
             extraCriteria.addNonNullCriteria(" o.hierarchy like ", searchCriteria.getHierarchy());
             extraCriteria.addNonNullCriteria(" g.staff_id = ", searchCriteria.getStaffId());
         }

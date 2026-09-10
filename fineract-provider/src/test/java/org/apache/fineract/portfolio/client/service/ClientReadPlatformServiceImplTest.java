@@ -21,15 +21,18 @@ package org.apache.fineract.portfolio.client.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Collections;
 import org.apache.fineract.infrastructure.codes.service.CodeValueReadPlatformService;
 import org.apache.fineract.infrastructure.core.service.PaginationHelper;
+import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.core.service.database.DatabaseSpecificSQLGenerator;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.utils.ColumnValidator;
@@ -39,8 +42,10 @@ import org.apache.fineract.portfolio.client.domain.ClientRepositoryWrapper;
 import org.apache.fineract.portfolio.client.exception.ClientNotFoundException;
 import org.apache.fineract.portfolio.client.mapper.ClientMapper;
 import org.apache.fineract.portfolio.collateralmanagement.domain.ClientCollateralManagementRepositoryWrapper;
+import org.apache.fineract.useradministration.domain.AppUser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -128,5 +133,20 @@ class ClientReadPlatformServiceImplTest {
         assertThrows(org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException.class, () -> {
             clientReadPlatformService.retrieveAll(searchParameters);
         });
+    }
+
+    @Test
+    void testRetrieveAllNameCriteriaUsesCaseInsensitiveSql() {
+        AppUser authenticatedUser = mock(AppUser.class);
+        when(context.officeHierarchy()).thenReturn("Root/");
+        when(context.authenticatedUser()).thenReturn(authenticatedUser);
+        when(authenticatedUser.getId()).thenReturn(1L);
+        when(paginationHelper.fetchPage(any(), anyString(), any(Object[].class), any(RowMapper.class))).thenReturn(null);
+
+        clientReadPlatformService.retrieveAll(SearchParameters.builder().name("Jane").build());
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(paginationHelper).fetchPage(any(), sqlCaptor.capture(), any(Object[].class), any(RowMapper.class));
+        assertTrue(sqlCaptor.getValue().contains("lower(c.display_name) like lower(?)"));
     }
 }

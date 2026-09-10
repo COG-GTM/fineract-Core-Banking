@@ -35,7 +35,8 @@ import lombok.Getter;
  */
 public class SQLBuilder {
 
-    private static final Pattern ATOZ = Pattern.compile("([a-zA-Z_][a-zA-Z0-9_-]*\\.)?[a-zA-Z_-][a-zA-Z0-9_-]*");
+    private static final Pattern ATOZ = Pattern
+            .compile("(?i)(?:([a-zA-Z_][a-zA-Z0-9_-]*\\.)?[a-zA-Z_-][a-zA-Z0-9_-]*|lower\\(([a-zA-Z_][a-zA-Z0-9_-]*\\.)?[a-zA-Z_-][a-zA-Z0-9_-]*\\))");
 
     // This holds the query string, with the '?' placeholders, but no argument
     // values
