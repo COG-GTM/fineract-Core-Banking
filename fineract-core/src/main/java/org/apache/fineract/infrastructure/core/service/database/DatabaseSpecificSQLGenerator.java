@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -46,8 +47,8 @@ public class DatabaseSpecificSQLGenerator {
     private final RoutingDataSource dataSource;
     public static final String SELECT_CLAUSE = "SELECT %s";
     public static final int IN_CLAUSE_MAX_PARAMS = 10_000;
-    private static final Pattern LIMIT_PATTERN = Pattern.compile("\\bLIMIT\\s+\\d+(\\s*,\\s*\\d+)?", Pattern.CASE_INSENSITIVE);
-    private static final Pattern OFFSET_PATTERN = Pattern.compile("\\bOFFSET\\s+\\d+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PAGINATION_PATTERN = Pattern.compile("LIMIT\\s+\\d+(\\s*,\\s*\\d+)?\\b|OFFSET\\s+\\d+\\b",
+            Pattern.CASE_INSENSITIVE);
 
     public DatabaseType getDialect() {
         return databaseTypeResolver.databaseType();
@@ -111,10 +112,43 @@ public class DatabaseSpecificSQLGenerator {
     }
 
     public String countQueryResult(@NonNull String sql) {
-        // Needs to remove the limit and offset (any case, including the MySQL "LIMIT offset,count" form)
-        sql = LIMIT_PATTERN.matcher(sql).replaceAll("").trim();
-        sql = OFFSET_PATTERN.matcher(sql).replaceAll("").trim();
-        return format("SELECT COUNT(*) FROM (%s) AS temp", sql);
+        return format("SELECT COUNT(*) FROM (%s) AS temp", stripTopLevelPagination(sql));
+    }
+
+    /**
+     * Removes the {@code LIMIT}/{@code OFFSET} clauses of the outermost statement only (any case, including the MySQL
+     * {@code LIMIT offset,count} form). Clauses inside parentheses, string literals or quoted identifiers are left
+     * untouched so a limited derived table keeps its row cap in the count query.
+     */
+    static String stripTopLevelPagination(String sql) {
+        StringBuilder result = new StringBuilder(sql.length());
+        int depth = 0;
+        char quote = 0;
+        int i = 0;
+        while (i < sql.length()) {
+            char c = sql.charAt(i);
+            if (quote != 0) {
+                if (c == quote) {
+                    quote = 0;
+                }
+            } else if (c == '\'' || c == '"' || c == '`') {
+                quote = c;
+            } else if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                depth--;
+            } else if (depth == 0 && (c == 'l' || c == 'L' || c == 'o' || c == 'O')
+                    && (i == 0 || !Character.isLetterOrDigit(sql.charAt(i - 1)) && sql.charAt(i - 1) != '_')) {
+                Matcher m = PAGINATION_PATTERN.matcher(sql).region(i, sql.length());
+                if (m.lookingAt()) {
+                    i = m.end();
+                    continue;
+                }
+            }
+            result.append(c);
+            i++;
+        }
+        return result.toString().trim();
     }
 
     public String currentBusinessDate() {

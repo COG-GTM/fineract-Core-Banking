@@ -153,4 +153,18 @@ public class DatabaseSpecificSQLGeneratorDialectTest {
         String sql = "SELECT credit_limit, offset_amount FROM t WHERE limit_type = 1";
         assertEquals("SELECT COUNT(*) FROM (" + sql + ") AS temp", generator.countQueryResult(sql));
     }
+
+    @Test
+    void countQueryResultKeepsNestedLimitAndOnlyStripsOuterOne() {
+        String sql = "SELECT * FROM (SELECT * FROM entries ORDER BY id LIMIT 5) limited WHERE x IN (SELECT y FROM z limit 3) LIMIT 2 OFFSET 1";
+        assertEquals("SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM entries ORDER BY id LIMIT 5) limited "
+                + "WHERE x IN (SELECT y FROM z limit 3)) AS temp", generator.countQueryResult(sql));
+    }
+
+    @Test
+    void countQueryResultKeepsLimitInsideLiteralsAndQuotedIdentifiers() {
+        String sql = "SELECT 'LIMIT 5', \"offset 3\", `limit 9` FROM t WHERE note = 'x' limit 7";
+        assertEquals("SELECT COUNT(*) FROM (SELECT 'LIMIT 5', \"offset 3\", `limit 9` FROM t WHERE note = 'x') AS temp",
+                generator.countQueryResult(sql));
+    }
 }
