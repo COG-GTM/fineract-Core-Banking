@@ -53,7 +53,7 @@ class DateUtilsTest {
         assertThat(DateUtils.compare(first, (LocalDateTime) null)).isPositive();
         assertThat(DateUtils.compare(first, second, ChronoUnit.MINUTES)).isZero();
         assertThat(DateUtils.isBefore(first, second)).isTrue();
-        assertThat(DateUtils.isAfter(second, first)).isTrue();
+        assertThat(DateUtils.isAfter(/* first= */ second, /* second= */ first)).isTrue();
     }
 
     @Test
@@ -79,7 +79,7 @@ class DateUtilsTest {
         assertThat(DateUtils.compare(first, second, ChronoUnit.MINUTES, true)).isZero();
         assertThat(DateUtils.isEqual(first, first)).isTrue();
         assertThat(DateUtils.isBefore(first, second)).isTrue();
-        assertThat(DateUtils.isAfter(second, first, ChronoUnit.SECONDS)).isTrue();
+        assertThat(DateUtils.isAfter(/* first= */ second, /* second= */ first, ChronoUnit.SECONDS)).isTrue();
         assertThat(DateUtils.isEqual((OffsetDateTime) null, (OffsetDateTime) null)).isTrue();
     }
 
