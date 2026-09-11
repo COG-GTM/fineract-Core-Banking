@@ -18,6 +18,8 @@
  */
 package org.apache.fineract.portfolio.savings.service;
 
+import java.lang.reflect.Method;
+import java.util.stream.Stream;
 import org.apache.fineract.accounting.common.AccountingEnumerations;
 import org.apache.fineract.accounting.common.AccountingRuleType;
 import org.apache.fineract.infrastructure.core.data.EnumOptionData;
@@ -29,6 +31,8 @@ import org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType;
 import org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class SavingsEnumerationsTest {
 
@@ -157,6 +161,56 @@ public class SavingsEnumerationsTest {
         EnumOptionData data = SavingsEnumerations.savingEnumeration("unknownType", 1);
 
         Assertions.assertNull(data);
+    }
+
+    @ParameterizedTest
+    @MethodSource("allMappings")
+    void mapsEveryValueOfEachExposedEnum(String enumClassName, String mapperName) throws Exception {
+        Class<?> enumType = Class.forName(enumClassName);
+        Method mapper = SavingsEnumerations.class.getMethod(mapperName, enumType);
+        for (Object enumValue : enumType.getEnumConstants()) {
+            Object option = mapper.invoke(null, enumValue);
+            Assertions.assertNotNull(option, mapperName + "(" + enumValue + ")");
+            Assertions.assertEquals(((Number) read(enumValue, "getValue", "getId")).longValue(),
+                    ((Number) read(option, "getId")).longValue());
+            Assertions.assertNotNull(read(enumValue, "getCode"));
+            Assertions.assertNotNull(read(option, "getCode"));
+        }
+    }
+
+    private static Stream<String[]> allMappings() {
+        return Stream.of(new String[] { "org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType", "lockinPeriodFrequencyType" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType", "recurringDepositFrequencyType" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType", "depositTermFrequencyType" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType",
+                        "inMultiplesOfDepositTermFrequencyType" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsPeriodFrequencyType", "depositPeriodFrequency" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsAccountTransactionType", "transactionType" },
+                new String[] { "org.apache.fineract.portfolio.savings.domain.SavingsAccountStatusType", "status" },
+                new String[] { "org.apache.fineract.portfolio.savings.domain.SavingsAccountSubStatusEnum", "subStatus" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsPostingInterestPeriodType", "interestPostingPeriodType" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType",
+                        "compoundingInterestPeriodType" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsInterestCalculationType", "interestCalculationType" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsInterestCalculationDaysInYearType",
+                        "interestCalculationDaysInYearType" },
+                new String[] { "org.apache.fineract.portfolio.savings.SavingsWithdrawalFeesType", "withdrawalFeeType" },
+                new String[] { "org.apache.fineract.portfolio.savings.PreClosurePenalInterestOnType", "preClosurePenaltyInterestOnType" },
+                new String[] { "org.apache.fineract.portfolio.savings.RecurringDepositType", "recurringDepositType" },
+                new String[] { "org.apache.fineract.portfolio.savings.DepositAccountType", "depositType" },
+                new String[] { "org.apache.fineract.portfolio.savings.DepositAccountOnClosureType", "depositAccountOnClosureType" },
+                new String[] { "org.apache.fineract.portfolio.savings.DepositAccountOnHoldTransactionType", "onHoldTransactionType" });
+    }
+
+    private static Object read(Object value, String... methodNames) throws Exception {
+        for (String methodName : methodNames) {
+            try {
+                return value.getClass().getMethod(methodName).invoke(value);
+            } catch (NoSuchMethodException ignored) {
+                // Enum data classes expose either id or value.
+            }
+        }
+        throw new NoSuchMethodException(String.join(",", methodNames));
     }
 
 }

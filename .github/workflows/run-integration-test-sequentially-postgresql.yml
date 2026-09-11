@@ -93,6 +93,15 @@ jobs:
             integration-tests/build/reports/
             twofactor-tests/build/reports/
             oauth2-tests/build/reports/
+
+      - name: Archive coverage execution data
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4
+        with:
+          name: coverage-exec-build
+          retention-days: 5
+          path: '**/build/jacoco/*.exec'
+
       - name: Archive server logs
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v4

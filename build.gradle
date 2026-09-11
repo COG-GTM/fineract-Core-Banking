@@ -384,6 +384,40 @@ file("${rootDir}/custom").eachDir { companyDir ->
     }
 }
 
+ext.jacocoCoverageHarnessModules = [
+    'integration-tests',
+    'twofactor-tests',
+    'oauth2-tests',
+    'fineract-e2e-tests-core',
+    'fineract-e2e-tests-runner',
+    'fineract-client',
+    'fineract-client-feign',
+    'fineract-avro-schemas'
+]
+// Per-module coverage floors (line, branch). Ratchet upwards as coverage improves; target is 0.80 / 0.70.
+ext.jacocoModuleMinimums = [
+    'fineract-branch' : [0.0, 0.0],
+    'fineract-command' : [0.15, 0.15],
+    'fineract-core' : [0.10, 0.05],
+    'fineract-document' : [0.40, 0.35],
+    'fineract-investor' : [0.60, 0.40],
+    'fineract-loan' : [0.05, 0.0],
+    'fineract-loan-origination' : [0.15, 0.15],
+    'fineract-progressive-loan' : [0.35, 0.25],
+    'fineract-progressive-loan-embeddable-schedule-generator' : [0.40, 0.0],
+    'fineract-provider' : [0.05, 0.0],
+    'fineract-savings' : [0.0, 0.0],
+    'fineract-validation' : [0.80, 0.60],
+    'fineract-working-capital-loan' : [0.20, 0.25]
+]
+ext.jacocoExclusions = [
+    '**/build/generated/**',
+    '**/org/apache/fineract/avro/**',
+    '**/org/apache/fineract/client/services/**',
+    '**/org/apache/fineract/client/feign/services/**',
+    '**/org/apache/fineract/client/util/JSON.class'
+]
+
 configure(project.fineractJavaProjects) {
     // NOTE: order matters!
 
@@ -559,11 +593,53 @@ configure(project.fineractJavaProjects) {
     }
 
     jacocoTestReport {
+        dependsOn test
+        onlyIf {
+            test.extensions.getByType(org.gradle.testing.jacoco.plugins.JacocoTaskExtension).destinationFile.exists()
+        }
         reports {
             html.required = true
+            html.outputLocation = layout.buildDirectory.dir('reports/jacoco/test/html')
             xml.required = true
-            html.outputLocation = layout.buildDirectory.dir('code-coverage')
+            xml.outputLocation = layout.buildDirectory.file('reports/jacoco/test/jacocoTestReport.xml')
+            csv.required = false
         }
+        classDirectories.setFrom(files(sourceSets.main.output).asFileTree.matching {
+            exclude rootProject.jacocoExclusions
+        })
+    }
+
+    jacocoTestCoverageVerification {
+        dependsOn test
+        onlyIf {
+            test.extensions.getByType(org.gradle.testing.jacoco.plugins.JacocoTaskExtension).destinationFile.exists()
+        }
+        classDirectories.setFrom(files(sourceSets.main.output).asFileTree.matching {
+            exclude rootProject.jacocoExclusions
+        })
+        violationRules {
+            rule {
+                element = 'BUNDLE'
+                limit {
+                    counter = 'LINE'
+                    value = 'COVEREDRATIO'
+                    minimum = ((rootProject.jacocoModuleMinimums[project.name] ?: [0.0, 0.0])[0]) as BigDecimal
+                }
+                limit {
+                    counter = 'BRANCH'
+                    value = 'COVEREDRATIO'
+                    minimum = ((rootProject.jacocoModuleMinimums[project.name] ?: [0.0, 0.0])[1]) as BigDecimal
+                }
+            }
+        }
+        if (project.name in rootProject.jacocoCoverageHarnessModules) {
+            enabled = false
+        }
+    }
+
+    tasks.matching { it.name == 'resolve' }.configureEach { resolveTask ->
+        jacocoTestReport.dependsOn(resolveTask)
+        jacocoTestCoverageVerification.dependsOn(resolveTask)
     }
 
     // Configuration for the errorprone plugin
@@ -678,7 +754,7 @@ configure(project.fineractJavaProjects) {
     }
 
     check {
-        dependsOn(rat, licenseMain, licenseTest)
+        dependsOn(rat, licenseMain, licenseTest, jacocoTestCoverageVerification)
     }
 
     dependencies {
@@ -713,6 +789,7 @@ configure(project.fineractJavaProjects) {
 
     test {
         useJUnitPlatform()
+        finalizedBy jacocoTestReport
 
         if (project.hasProperty('excludeTests')) {
             filter {
@@ -895,6 +972,72 @@ configure(project.fineractPublishProjects) {
         signing {
             sign publishing.publications.mavenJava
         }
+    }
+}
+
+def jacocoAggregateProjects = project.fineractJavaProjects.findAll {
+    !(it.name in project.jacocoCoverageHarnessModules)
+}
+
+def jacocoAggregateExecutionData() {
+    files(project.fineractJavaProjects.collect {
+        it.layout.buildDirectory.files('jacoco/test.exec', 'jacoco/cargo.exec')
+    })
+}
+
+tasks.register('jacocoAggregatedReport', org.gradle.testing.jacoco.tasks.JacocoReport) {
+    dependsOn project.fineractJavaProjects.collect { it.tasks.named('test') }
+    jacocoClasspath = files(jacocoAggregateProjects.collect { it.configurations.jacocoAnt })
+    executionData.setFrom(jacocoAggregateExecutionData())
+    sourceDirectories.setFrom(files(jacocoAggregateProjects.collect {
+        it.sourceSets.main.allSource.srcDirs
+    }))
+    classDirectories.setFrom(files(jacocoAggregateProjects.collect {
+        it.sourceSets.main.output.asFileTree.matching {
+            exclude rootProject.jacocoExclusions
+        }
+    }))
+    reports {
+        xml.required = true
+        xml.outputLocation = layout.buildDirectory.file('reports/jacoco/aggregate/jacocoAggregatedReport.xml')
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/aggregate/html')
+    }
+    onlyIf {
+        executionData.files.any { it.exists() }
+    }
+}
+
+tasks.register('jacocoAggregatedCoverageVerification', org.gradle.testing.jacoco.tasks.JacocoCoverageVerification) {
+    dependsOn project.fineractJavaProjects.collect { it.tasks.named('test') }
+    dependsOn tasks.named('jacocoAggregatedReport')
+    jacocoClasspath = files(jacocoAggregateProjects.collect { it.configurations.jacocoAnt })
+    executionData.setFrom(jacocoAggregateExecutionData())
+    sourceDirectories.setFrom(files(jacocoAggregateProjects.collect {
+        it.sourceSets.main.allSource.srcDirs
+    }))
+    classDirectories.setFrom(files(jacocoAggregateProjects.collect {
+        it.sourceSets.main.output.asFileTree.matching {
+            exclude rootProject.jacocoExclusions
+        }
+    }))
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = (project.findProperty('coverageMinimumLine') ?: '0.0') as BigDecimal
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = (project.findProperty('coverageMinimumBranch') ?: '0.0') as BigDecimal
+            }
+        }
+    }
+    onlyIf {
+        executionData.files.any { it.exists() }
     }
 }
 

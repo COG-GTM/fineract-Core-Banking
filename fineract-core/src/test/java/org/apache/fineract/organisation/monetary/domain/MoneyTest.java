@@ -19,6 +19,7 @@
 package org.apache.fineract.organisation.monetary.domain;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -108,5 +109,20 @@ class MoneyTest {
     void testAddMoney() {
         Money result = tenDollars.add(oneDollar, MATH_CONTEXT);
         assertEquals(0, result.getAmount().compareTo(new BigDecimal("11.00")), "Should correctly add two Money amounts");
+    }
+
+    @Test
+    void testCurrencyMismatchIsRejected() {
+        MonetaryCurrency eur = new MonetaryCurrency("EUR", 2, null);
+        assertThrows(UnsupportedOperationException.class, () -> tenDollars.plus(Money.of(eur, BigDecimal.ONE)));
+    }
+
+    @Test
+    void testRoundingAndComparisons() {
+        Money rounded = Money.of(CURRENCY, new BigDecimal("10.126"));
+        assertEquals(0, rounded.getAmount().compareTo(new BigDecimal("10.13")));
+        assertEquals(1, tenDollars.compareTo(oneDollar));
+        assertEquals(0, tenDollars.copy().compareTo(tenDollars));
+        assertEquals(0, Money.roundToMultiplesOf(new BigDecimal("124"), 50).compareTo(new BigDecimal("150")));
     }
 }

@@ -30,6 +30,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -190,6 +191,64 @@ class LoanRepaymentScheduleInstallmentTest {
         // Test that value is properly rounded
         final BigDecimal expected = new BigDecimal("123456789.123457");
         assertEquals(expected, installment.getPrincipal());
+    }
+
+    @Test
+    void testOutstandingAndTotalPaidCalculations() {
+        installment.setPrincipalCompleted(new BigDecimal("250"));
+        installment.setPrincipalWrittenOff(new BigDecimal("50"));
+        installment.setInterestPaid(new BigDecimal("10"));
+        installment.setFeeChargesPaid(new BigDecimal("5"));
+        installment.setPenaltyChargesPaid(new BigDecimal("2"));
+
+        assertEquals(new BigDecimal("700.000000"),
+                installment.getPrincipalOutstanding(new org.apache.fineract.organisation.monetary.domain.MonetaryCurrency("USD", 6, null))
+                        .getAmount());
+        assertEquals(new BigDecimal("267.000000"), installment
+                .getTotalPaid(new org.apache.fineract.organisation.monetary.domain.MonetaryCurrency("USD", 6, null)).getAmount());
+    }
+
+    @Test
+    void paysWaivesAndWritesOffEveryComponentUsingDueDate() {
+        final org.apache.fineract.organisation.monetary.domain.MonetaryCurrency currency = new org.apache.fineract.organisation.monetary.domain.MonetaryCurrency(
+                "USD", 6, null);
+        final LocalDate dueDate = installment.getDueDate();
+        final LocalDate paymentDate = dueDate.minusDays(1);
+
+        assertEquals(new BigDecimal("25.000000"),
+                installment.payPenaltyChargesComponent(paymentDate, Money.of(currency, BigDecimal.valueOf(25))).getAmount());
+        assertEquals(new BigDecimal("50.000000"),
+                installment.payFeeChargesComponent(paymentDate, Money.of(currency, BigDecimal.valueOf(50))).getAmount());
+        assertEquals(new BigDecimal("100.000000"),
+                installment.payInterestComponent(paymentDate, Money.of(currency, BigDecimal.valueOf(100))).getAmount());
+        assertEquals(new BigDecimal("1000.000000"),
+                installment.payPrincipalComponent(paymentDate, Money.of(currency, BigDecimal.valueOf(1000))).getAmount());
+        assertEquals(new BigDecimal("1175.000000"), installment.getTotalPaid(currency).getAmount());
+        assertEquals(new BigDecimal("0.000000"), installment.getTotalOutstanding(currency).getAmount());
+        assertEquals(true, installment.isObligationsMet());
+        assertEquals(false, installment.isNotFullyPaidOff());
+        assertEquals(paymentDate, installment.getObligationsMetOnDate());
+        assertEquals(new BigDecimal("1175.000000"), installment.getTotalPaidInAdvance(currency).getAmount());
+
+        LoanRepaymentScheduleInstallment unpaid = new LoanRepaymentScheduleInstallment(mock(Loan.class), 2, dueDate.minusMonths(1), dueDate,
+                BigDecimal.valueOf(1000), BigDecimal.valueOf(100), BigDecimal.valueOf(50), BigDecimal.valueOf(25), BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false, false, false);
+        assertEquals(new BigDecimal("100.000000"),
+                unpaid.waiveInterestComponent(dueDate, Money.of(currency, BigDecimal.valueOf(100))).getAmount());
+        assertEquals(new BigDecimal("50.000000"),
+                unpaid.waiveFeeChargesComponent(dueDate, Money.of(currency, BigDecimal.valueOf(50))).getAmount());
+        assertEquals(new BigDecimal("25.000000"),
+                unpaid.waivePenaltyChargesComponent(dueDate, Money.of(currency, BigDecimal.valueOf(25))).getAmount());
+        assertEquals(new BigDecimal("1000.000000"), unpaid.writeOffOutstandingPrincipal(dueDate, currency).getAmount());
+        assertEquals(true, unpaid.isObligationsMet());
+
+        LoanRepaymentScheduleInstallment writtenOff = new LoanRepaymentScheduleInstallment(mock(Loan.class), 3, dueDate.minusMonths(1),
+                dueDate, BigDecimal.valueOf(1000), BigDecimal.valueOf(100), BigDecimal.valueOf(50), BigDecimal.valueOf(25), BigDecimal.ZERO,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, false, false, false);
+        assertEquals(new BigDecimal("100.000000"), writtenOff.writeOffOutstandingInterest(dueDate, currency).getAmount());
+        assertEquals(new BigDecimal("50.000000"), writtenOff.writeOffOutstandingFeeCharges(dueDate, currency).getAmount());
+        assertEquals(new BigDecimal("25.000000"), writtenOff.writeOffOutstandingPenaltyCharges(dueDate, currency).getAmount());
+        assertEquals(true, writtenOff.isNotFullyPaidOff());
     }
 
     private void testBigDecimalSetter(final Consumer<BigDecimal> setter, final Supplier<BigDecimal> getter) {

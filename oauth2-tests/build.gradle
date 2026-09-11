@@ -19,6 +19,7 @@
 description = 'Fineract Integration Tests for OAuth2'
 
 apply plugin: 'com.bmuschko.cargo'
+apply from: "$rootDir/gradle/jacoco-cargo.gradle"
 
 // Configuration for the Gradle Cargo plugin
 // https://github.com/bmuschko/gradle-cargo-plugin
@@ -73,6 +74,7 @@ cargo {
                 jvmArgs += '-Dspring.datasource.hikari.driverClassName=org.mariadb.jdbc.Driver -Dspring.datasource.hikari.jdbcUrl=jdbc:mariadb://localhost:3306/fineract_tenants -Dspring.datasource.hikari.username=root -Dspring.datasource.hikari.password=mysql -Dfineract.tenant.host=localhost -Dfineract.tenant.port=3306 -Dfineract.tenant.username=root -Dfineract.tenant.password=mysql'
             }
             jvmArgs += ' -Dspring.profiles.active=test -Dfineract.events.external.enabled=true'
+            jvmArgs = "${jacocoCargoJvmArg} ${jvmArgs}"
             property 'cargo.start.jvmargs', jvmArgs
             property 'cargo.tomcat.connector.keystoreFile', file("$rootDir/fineract-provider/src/main/resources/keystore.jks")
             property 'cargo.tomcat.connector.keystorePass', 'openmf'
