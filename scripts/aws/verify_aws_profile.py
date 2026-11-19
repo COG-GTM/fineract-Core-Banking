@@ -108,7 +108,7 @@ def main():
             if env.get("FINERACT_DEFAULT_TENANTDB_RO_HOSTNAME"):
                 tls_settings.append("FINERACT_DEFAULT_TENANTDB_RO_CONN_PARAMS")
             for name in tls_settings:
-                if "sslmode=verify-full" not in env.get(name, ""):
+                if ssl_modes(env.get(name, "")) != ["verify-full"]:
                     errors.append(f"{service}: {name} must use sslmode=verify-full (verify the database server identity)")
 
         if spec["modes"]:
@@ -125,6 +125,12 @@ def main():
         return fail(errors)
     print(f"AWS profile OK: {len(services)} task definitions checked")
     return 0
+
+
+def ssl_modes(value):
+    """sslmode values in a JDBC URL query or a bare connection parameter string."""
+    query = value.split("?", 1)[1] if value.startswith("jdbc:") and "?" in value else ("" if value.startswith("jdbc:") else value)
+    return [v for k, v in (p.split("=", 1) if "=" in p else (p, "") for p in query.split("&")) if k.strip().lower() == "sslmode"]
 
 
 def fail(errors):

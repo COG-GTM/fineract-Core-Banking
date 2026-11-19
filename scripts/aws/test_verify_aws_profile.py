@@ -99,6 +99,14 @@ class VerifyAwsProfileTest(unittest.TestCase):
         self.set_env("FINERACT_DEFAULT_TENANTDB_CONN_PARAMS", "sslmode=prefer")
         self.assert_fails_with("FINERACT_DEFAULT_TENANTDB_CONN_PARAMS must use sslmode=verify-full")
 
+    def test_disabled_database_tls_hidden_in_other_parameter_fails(self):
+        self.set_env("FINERACT_DEFAULT_TENANTDB_CONN_PARAMS", "sslmode=disable&ApplicationName=sslmode=verify-full")
+        self.assert_fails_with("FINERACT_DEFAULT_TENANTDB_CONN_PARAMS must use sslmode=verify-full")
+
+    def test_jdbc_url_without_tls_parameters_fails(self):
+        self.set_env("FINERACT_HIKARI_JDBC_URL", "jdbc:postgresql://db:5432/fineract_tenants?ApplicationName=sslmode=verify-full")
+        self.assert_fails_with("FINERACT_HIKARI_JDBC_URL must use sslmode=verify-full")
+
     def test_unknown_fineract_variable_fails(self):
         self.set_env("FINERACT_HIKARI_PASWORD_TYPO", "x")
         self.assert_fails_with("FINERACT_HIKARI_PASWORD_TYPO is not read by any application*.properties")
