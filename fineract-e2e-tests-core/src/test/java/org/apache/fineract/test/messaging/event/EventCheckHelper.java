@@ -169,60 +169,55 @@ public class EventCheckHelper {
         GetLoansLoanIdResponse body = ok(() -> fineractClient.loans().retrieveLoan(loanId,
                 Map.of("staffInSelectedOfficeOnly", false, "associations", "all", "exclude", "", "fields", "")));
 
-        eventAssertion.assertEvent(eventClazz, loanId)//
-                .extractingData(loanAccountDataV1 -> {
-                    Long idActual = loanAccountDataV1.getId();
-                    Long idExpected = body.getId();
-                    Integer statusIdActual = loanAccountDataV1.getStatus().getId();
-                    Integer statusIdExpected = body.getStatus().getId();
-                    String statusCodeActual = loanAccountDataV1.getStatus().getCode();
-                    String statusCodeExpected = body.getStatus().getCode();
-                    Long clientIdActual = loanAccountDataV1.getClientId();
-                    Long clientIdExpected = body.getClientId();
-                    BigDecimal principalDisbursedActual = loanAccountDataV1.getSummary().getPrincipalDisbursed();
-                    Double principalDisbursedExpectedDouble = body.getSummary().getPrincipalDisbursed().doubleValue();
-                    BigDecimal principalDisbursedExpected = BigDecimal.valueOf(principalDisbursedExpectedDouble);
-                    String actualDisbursementDateActual = loanAccountDataV1.getTimeline().getActualDisbursementDate();
-                    String actualDisbursementDateExpected = FORMATTER_EVENTS.format(body.getTimeline().getActualDisbursementDate());
-                    String currencyCodeActual = loanAccountDataV1.getSummary().getCurrency().getCode();
-                    String currencyCodeExpected = body.getSummary().getCurrency().getCode();
-                    BigDecimal totalUnpaidPayableDueInterestActual = loanAccountDataV1.getSummary().getTotalUnpaidPayableDueInterest();
-                    BigDecimal totalUnpaidPayableDueInterestExpected = body.getSummary().getTotalUnpaidPayableDueInterest();
-                    BigDecimal totalUnpaidPayableNotDueInterestActual = loanAccountDataV1.getSummary()
-                            .getTotalUnpaidPayableNotDueInterest();
-                    BigDecimal totalUnpaidPayableNotDueInterestExpected = body.getSummary().getTotalUnpaidPayableNotDueInterest();
-                    BigDecimal totalInterestPaymentWaiverActual = loanAccountDataV1.getSummary().getTotalInterestPaymentWaiver();
-                    Double totalInterestPaymentWaiverExpectedDouble = body.getSummary().getTotalInterestPaymentWaiver().doubleValue();
-                    BigDecimal totalInterestPaymentWaiverExpected = new BigDecimal(totalInterestPaymentWaiverExpectedDouble,
-                            MathContext.DECIMAL64);
-                    BigDecimal delinquentInterestActual = loanAccountDataV1.getDelinquent().getDelinquentInterest();
-                    BigDecimal delinquentInterestExpected = body.getDelinquent().getDelinquentInterest();
-                    BigDecimal delinquentFeeActual = loanAccountDataV1.getDelinquent().getDelinquentFee();
-                    BigDecimal delinquentFeeExpected = body.getDelinquent().getDelinquentFee();
-                    BigDecimal delinquentPenaltyActual = loanAccountDataV1.getDelinquent().getDelinquentPenalty();
-                    BigDecimal delinquentPenaltyExpected = body.getDelinquent().getDelinquentPenalty();
-                    Integer actualNoTermActual = loanAccountDataV1.getActualNoTerm();
-                    Integer actualNoTermExpected = body.getActualNoTerm();
+        eventAssertion.assertEventMatching(eventClazz, loanId, loanAccountDataV1 -> {
+            Long idActual = loanAccountDataV1.getId();
+            Long idExpected = body.getId();
+            Integer statusIdActual = loanAccountDataV1.getStatus().getId();
+            Integer statusIdExpected = body.getStatus().getId();
+            String statusCodeActual = loanAccountDataV1.getStatus().getCode();
+            String statusCodeExpected = body.getStatus().getCode();
+            Long clientIdActual = loanAccountDataV1.getClientId();
+            Long clientIdExpected = body.getClientId();
+            BigDecimal principalDisbursedActual = loanAccountDataV1.getSummary().getPrincipalDisbursed();
+            Double principalDisbursedExpectedDouble = body.getSummary().getPrincipalDisbursed().doubleValue();
+            BigDecimal principalDisbursedExpected = BigDecimal.valueOf(principalDisbursedExpectedDouble);
+            String actualDisbursementDateActual = loanAccountDataV1.getTimeline().getActualDisbursementDate();
+            String actualDisbursementDateExpected = FORMATTER_EVENTS.format(body.getTimeline().getActualDisbursementDate());
+            String currencyCodeActual = loanAccountDataV1.getSummary().getCurrency().getCode();
+            String currencyCodeExpected = body.getSummary().getCurrency().getCode();
+            BigDecimal totalUnpaidPayableDueInterestActual = loanAccountDataV1.getSummary().getTotalUnpaidPayableDueInterest();
+            BigDecimal totalUnpaidPayableDueInterestExpected = body.getSummary().getTotalUnpaidPayableDueInterest();
+            BigDecimal totalUnpaidPayableNotDueInterestActual = loanAccountDataV1.getSummary().getTotalUnpaidPayableNotDueInterest();
+            BigDecimal totalUnpaidPayableNotDueInterestExpected = body.getSummary().getTotalUnpaidPayableNotDueInterest();
+            BigDecimal totalInterestPaymentWaiverActual = loanAccountDataV1.getSummary().getTotalInterestPaymentWaiver();
+            Double totalInterestPaymentWaiverExpectedDouble = body.getSummary().getTotalInterestPaymentWaiver().doubleValue();
+            BigDecimal totalInterestPaymentWaiverExpected = new BigDecimal(totalInterestPaymentWaiverExpectedDouble, MathContext.DECIMAL64);
+            BigDecimal delinquentInterestActual = loanAccountDataV1.getDelinquent().getDelinquentInterest();
+            BigDecimal delinquentInterestExpected = body.getDelinquent().getDelinquentInterest();
+            BigDecimal delinquentFeeActual = loanAccountDataV1.getDelinquent().getDelinquentFee();
+            BigDecimal delinquentFeeExpected = body.getDelinquent().getDelinquentFee();
+            BigDecimal delinquentPenaltyActual = loanAccountDataV1.getDelinquent().getDelinquentPenalty();
+            BigDecimal delinquentPenaltyExpected = body.getDelinquent().getDelinquentPenalty();
+            Integer actualNoTermActual = loanAccountDataV1.getActualNoTerm();
+            Integer actualNoTermExpected = body.getActualNoTerm();
 
-                    assertThat(idActual).isEqualTo(idExpected);
-                    assertThat(statusIdActual).isEqualTo(statusIdExpected);
-                    assertThat(statusCodeActual).isEqualTo(statusCodeExpected);
-                    assertThat(clientIdActual).isEqualTo(clientIdExpected);
-                    assertThat(areBigDecimalValuesEqual(principalDisbursedActual, principalDisbursedExpected)).isTrue();
-                    assertThat(actualDisbursementDateActual).isEqualTo(actualDisbursementDateExpected);
-                    assertThat(currencyCodeActual).isEqualTo(currencyCodeExpected);
-                    assertThat(areBigDecimalValuesEqual(totalUnpaidPayableDueInterestActual, totalUnpaidPayableDueInterestExpected))
-                            .isTrue();
-                    assertThat(areBigDecimalValuesEqual(totalUnpaidPayableNotDueInterestActual, totalUnpaidPayableNotDueInterestExpected))
-                            .isTrue();
-                    assertThat(areBigDecimalValuesEqual(totalInterestPaymentWaiverActual, totalInterestPaymentWaiverExpected)).isTrue();
-                    assertThat(areBigDecimalValuesEqual(delinquentInterestActual, delinquentInterestExpected)).isTrue();
-                    assertThat(areBigDecimalValuesEqual(delinquentFeeActual, delinquentFeeExpected)).isTrue();
-                    assertThat(areBigDecimalValuesEqual(delinquentPenaltyActual, delinquentPenaltyExpected)).isTrue();
-                    assertThat(actualNoTermActual).isEqualTo(actualNoTermExpected);
+            assertThat(idActual).isEqualTo(idExpected);
+            assertThat(statusIdActual).isEqualTo(statusIdExpected);
+            assertThat(statusCodeActual).isEqualTo(statusCodeExpected);
+            assertThat(clientIdActual).isEqualTo(clientIdExpected);
+            assertThat(areBigDecimalValuesEqual(principalDisbursedActual, principalDisbursedExpected)).isTrue();
+            assertThat(actualDisbursementDateActual).isEqualTo(actualDisbursementDateExpected);
+            assertThat(currencyCodeActual).isEqualTo(currencyCodeExpected);
+            assertThat(areBigDecimalValuesEqual(totalUnpaidPayableDueInterestActual, totalUnpaidPayableDueInterestExpected)).isTrue();
+            assertThat(areBigDecimalValuesEqual(totalUnpaidPayableNotDueInterestActual, totalUnpaidPayableNotDueInterestExpected)).isTrue();
+            assertThat(areBigDecimalValuesEqual(totalInterestPaymentWaiverActual, totalInterestPaymentWaiverExpected)).isTrue();
+            assertThat(areBigDecimalValuesEqual(delinquentInterestActual, delinquentInterestExpected)).isTrue();
+            assertThat(areBigDecimalValuesEqual(delinquentFeeActual, delinquentFeeExpected)).isTrue();
+            assertThat(areBigDecimalValuesEqual(delinquentPenaltyActual, delinquentPenaltyExpected)).isTrue();
+            assertThat(actualNoTermActual).isEqualTo(actualNoTermExpected);
 
-                    return null;
-                });
+            return null;
+        });
     }
 
     public GetLoansLoanIdTransactions getNthTransactionType(String nthItemStr, String transactionType, String transactionDate,
