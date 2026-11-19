@@ -1,0 +1,9 @@
+flowchart LR
+  P0[Phase 0<br/>Mobilise and assess<br/>2 wks] --> P1[Phase 1<br/>Landing zone and IaC<br/>3 wks]
+  P1 --> P2[Phase 2<br/>Make the app cloud-ready<br/>3 wks]
+  P1 --> P3[Phase 3<br/>CI/CD to AWS<br/>2 wks]
+  P2 --> P4[Phase 4<br/>Database migration rehearsals<br/>4 wks]
+  P3 --> P4
+  P4 --> P5[Phase 5<br/>Performance, resilience,<br/>security sign-off<br/>3 wks]
+  P5 --> P6[Phase 6<br/>Tenant-wave cutover<br/>pilot then waves<br/>3-6 wks]
+  P6 --> P7[Phase 7<br/>Hypercare and<br/>decommission<br/>4 wks]

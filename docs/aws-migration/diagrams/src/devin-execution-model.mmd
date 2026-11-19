@@ -1,0 +1,24 @@
+flowchart TB
+  H[Human migration lead<br/>+ architect, DBA, security]
+  subgraph Plan["Plan"]
+    BOARD[Jira epic / Devin board<br/>one ticket per work package]
+    KN[Devin Knowledge + playbooks<br/>conventions, guardrails, runbooks]
+  end
+  subgraph Run["Execute (parallel child sessions)"]
+    C1[IaC sessions<br/>network, Aurora, MSK, ECS, S3]
+    C2[App readiness sessions<br/>config, S3 IAM, logging, probes]
+    C3[DB compatibility sessions<br/>dialect audit, Aurora test runs]
+    C4[Pipeline sessions<br/>OIDC, ECR, deploy by digest]
+    C5[Data migration sessions<br/>DMS tasks, reconciliation]
+    C6[Test sessions<br/>E2E recordings, load tests]
+  end
+  subgraph Gate["Verify and gate"]
+    PR[PR per ticket<br/>CI green + Devin Review]
+    TP[terraform plan / DMS dry run<br/>attached as evidence]
+    HG[Human approval<br/>merge, apply, cutover go/no-go]
+  end
+  H --> BOARD
+  KN --> Run
+  BOARD --> C1 & C2 & C3 & C4 & C5 & C6
+  C1 & C2 & C3 & C4 & C5 & C6 --> PR --> TP --> HG
+  HG -- feedback / new tickets --> BOARD

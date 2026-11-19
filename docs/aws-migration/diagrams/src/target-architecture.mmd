@@ -1,0 +1,47 @@
+flowchart LR
+  subgraph Users
+    U1[Back-office staff<br/>Mifos web app]
+    U2[Partner / channel<br/>API clients]
+  end
+  subgraph Edge["Edge (global)"]
+    R53[Route 53]
+    CF[CloudFront + S3<br/>web UI static assets]
+    WAF[AWS WAF]
+  end
+  subgraph VPC["VPC - 3 AZs - private subnets"]
+    ALB[Application Load Balancer<br/>TLS via ACM]
+    subgraph ECS["Amazon ECS on Fargate (one service per instance type)"]
+      RD[fineract-read<br/>read-only mode<br/>autoscaled]
+      WR[fineract-write<br/>write mode<br/>autoscaled]
+      BM[fineract-batch-manager<br/>Quartz + COB manager<br/>desired = 1]
+      BW[fineract-batch-worker<br/>COB partitions<br/>autoscaled on lag]
+      LQ[liquibase-only task<br/>one-off, pre-deploy]
+    end
+    subgraph Data
+      AUR[(Aurora PostgreSQL<br/>writer + readers<br/>fineract_tenants + tenant DBs)]
+      MSK[[Amazon MSK<br/>IAM auth<br/>job-topic / external-events]]
+      S3D[(S3 documents bucket<br/>SSE-KMS)]
+    end
+  end
+  subgraph Shared["Security & operations"]
+    SM[Secrets Manager + KMS]
+    CW[CloudWatch Logs / Metrics<br/>ADOT -> X-Ray / AMP]
+    ECR[ECR - images by digest]
+  end
+  U1 --> R53 --> CF
+  U1 --> WAF
+  U2 --> WAF --> ALB
+  ALB -- GET --> RD
+  ALB -- POST/PUT/DELETE --> WR
+  ALB -- /jobs --> BM
+  RD --> AUR
+  WR --> AUR
+  BM --> AUR
+  BW --> AUR
+  LQ --> AUR
+  BM -- partitions --> MSK --> BW
+  WR -- business events --> MSK
+  WR -- documents --> S3D
+  ECS -.-> SM
+  ECS -.-> CW
+  ECR -.-> ECS
