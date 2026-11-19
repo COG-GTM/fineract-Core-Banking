@@ -137,7 +137,19 @@ public class TomcatJdbcDataSourcePerTenantService
         log.debug("Database connection for {} initialized", tenant.getName());
     }
 
-    private DataSource dataSourceFor(FineractPlatformTenant tenant, boolean verifyNewConnection) {
+    private DataSource dataSourceFor(FineractPlatformTenant requestTenant, boolean verifyNewConnection) {
+        final Long requestConnectionId = requestTenant.getConnection().getConnectionId();
+        final TenantPool cached = tenantPools.get(requestConnectionId);
+        if (cached != null && cached.fingerprint().equals(ConnectionFingerprint.of(requestTenant.getConnection()))) {
+            final Long knownConnectionId = tenantConnectionIds.putIfAbsent(requestTenant.getTenantIdentifier(), requestConnectionId);
+            if (knownConnectionId == null || knownConnectionId.equals(requestConnectionId)) {
+                return cached.dataSource();
+            }
+        }
+
+        // The request's tenant details may predate a connection change (e.g. a long-running request); route by the
+        // current details so a stale request never brings back a retired pool.
+        final FineractPlatformTenant tenant = verifyNewConnection ? requestTenant : currentDetailsOf(requestTenant);
         final FineractPlatformTenantConnection tenantConnection = tenant.getConnection();
         final Long connectionId = tenantConnection.getConnectionId();
         final ConnectionFingerprint fingerprint = ConnectionFingerprint.of(tenantConnection);
@@ -148,6 +160,17 @@ public class TomcatJdbcDataSourcePerTenantService
         }
         retirePreviousConnectionOf(tenant, connectionId);
         return pool.dataSource();
+    }
+
+    private FineractPlatformTenant currentDetailsOf(FineractPlatformTenant requestTenant) {
+        try {
+            FineractPlatformTenant current = tenantDetailsService.loadTenantById(requestTenant.getTenantIdentifier());
+            return current == null || current.getConnection() == null ? requestTenant : current;
+        } catch (RuntimeException e) {
+            log.warn("Could not reload connection details of tenant {}; using the request's details", requestTenant.getTenantIdentifier(),
+                    e);
+            return requestTenant;
+        }
     }
 
     private TenantPool replacePool(FineractPlatformTenant tenant, FineractPlatformTenantConnection tenantConnection,

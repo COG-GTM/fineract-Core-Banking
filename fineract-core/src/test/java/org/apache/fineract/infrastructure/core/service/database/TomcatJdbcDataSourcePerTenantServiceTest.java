@@ -137,6 +137,46 @@ class TomcatJdbcDataSourcePerTenantServiceTest {
     }
 
     @Test
+    void staleRequestAfterInPlaceChangeDoesNotRevertPool() {
+        FineractPlatformTenant before = tenant("default", connection(1L, "db-a"));
+        FineractPlatformTenant after = tenant("default", connection(1L, "db-b"));
+        retrieveFor(before);
+        when(tenantDetailsService.loadTenantById("default")).thenReturn(after);
+        DataSource newPool = retrieveFor(after);
+
+        assertSame(newPool, retrieveFor(before));
+        verify(factory, times(2)).createNewDataSourceFor(any(), any(), anyLong());
+        verify(createdPools.get(0), timeout(CLOSE_TIMEOUT_MILLIS)).close();
+        verify(createdPools.get(1), after(200).never()).close();
+    }
+
+    @Test
+    void staleRequestAfterMoveDoesNotRevertPool() {
+        FineractPlatformTenant before = tenant("default", connection(1L, "db-a"));
+        FineractPlatformTenant after = tenant("default", connection(2L, "db-b"));
+        retrieveFor(before);
+        when(tenantDetailsService.loadTenantById("default")).thenReturn(after);
+        DataSource newPool = retrieveFor(after);
+
+        assertSame(newPool, retrieveFor(before));
+        verify(factory, times(2)).createNewDataSourceFor(any(), any(), anyLong());
+        verify(createdPools.get(0), timeout(CLOSE_TIMEOUT_MILLIS)).close();
+        verify(createdPools.get(1), after(200).never()).close();
+    }
+
+    @Test
+    void movingToAnExistingSharedPoolRetiresTheOldOne() {
+        retrieveFor(tenant("first", connection(1L, "db-a")));
+        DataSource shared = retrieveFor(tenant("second", connection(2L, "db-b")));
+        FineractPlatformTenant moved = tenant("first", connection(2L, "db-b"));
+        when(tenantDetailsService.loadTenantById("first")).thenReturn(moved);
+
+        assertSame(shared, retrieveFor(moved));
+        verify(createdPools.get(0), timeout(CLOSE_TIMEOUT_MILLIS)).close();
+        verify(createdPools.get(1), never()).close();
+    }
+
+    @Test
     void waitsForInUseConnectionsBeforeClosingRetiredPool() {
         retrieveFor(tenant("default", connection(1L, "db-a")));
         HikariPoolMXBean oldPoolBean = createdPoolBeans.get(0);
