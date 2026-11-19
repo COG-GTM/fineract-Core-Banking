@@ -237,6 +237,7 @@ public class TomcatJdbcDataSourcePerTenantService
         }
     }
 
+    @SuppressWarnings("FutureReturnValueIgnored")
     private void closeWhenIdle(HikariDataSource dataSource, long deadline) {
         try {
             HikariPoolMXBean pool = dataSource.getHikariPoolMXBean();
