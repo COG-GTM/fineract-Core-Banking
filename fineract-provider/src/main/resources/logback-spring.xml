@@ -44,7 +44,7 @@
     <if condition="${jsonLoggingEnabled} == true">
         <then>
             <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
-                <layout class="ch.qos.logback.contrib.json.classic.JsonLayout">
+                <layout class="org.apache.fineract.infrastructure.core.logging.TenantAwareJsonLayout">
                     <jsonFormatter class="ch.qos.logback.contrib.jackson.JacksonJsonFormatter">
                         <prettyPrint>false</prettyPrint>
                     </jsonFormatter>
