@@ -48,6 +48,7 @@ import org.apache.fineract.infrastructure.core.service.tenant.TenantDetailsServi
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.event.ContextRefreshedEvent;
 
 class TomcatJdbcDataSourcePerTenantServiceTest {
 
@@ -219,7 +220,7 @@ class TomcatJdbcDataSourcePerTenantServiceTest {
         FineractPlatformTenant tenant = tenant("default", connection(1L, "db-a"));
         when(tenantDetailsService.findAllTenants()).thenReturn(List.of(tenant));
 
-        underTest.onApplicationEvent(null);
+        underTest.onApplicationEvent(mock(ContextRefreshedEvent.class));
 
         assertSame(createdPools.get(0), retrieveFor(tenant("default", connection(1L, "db-a"))));
         verify(factory).createNewDataSourceFor(any(), any(), eq(0L));
