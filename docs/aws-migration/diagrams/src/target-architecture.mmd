@@ -33,7 +33,7 @@ flowchart LR
   U2 --> WAF --> ALB
   ALB -- GET --> RD
   ALB -- POST/PUT/DELETE --> WR
-  ALB -- /jobs --> BM
+  ALB -- /jobs, /scheduler, /loans/catch-up --> BM
   RD --> AUR
   WR --> AUR
   BM --> AUR
@@ -42,6 +42,7 @@ flowchart LR
   BM -- partitions --> MSK --> BW
   WR -- business events --> MSK
   WR -- documents --> S3D
+  RD -- document downloads --> S3D
   ECS -.-> SM
   ECS -.-> CW
   ECR -.-> ECS

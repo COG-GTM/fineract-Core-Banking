@@ -78,7 +78,7 @@ Because tenants live in separate databases, the **cutover can be done tenant by 
 
 | # | Criterion | Measured by |
 |---|---|---|
-| S1 | 100% of tenants migrated, source decommissioned | Tenant register (`tenant_server_connections`) all pointing at Aurora |
+| S1 | 100% of tenants migrated, source decommissioned | Every tenant served from the AWS tenant store; no ALB rule routes to the source fleet |
 | S2 | Zero reconciliation breaks per tenant | Row counts, checksums, trial balance and portfolio totals ([§6.6](#66-reconciliation-the-financial-acceptance-test)) |
 | S3 | p95 API latency ≤ baseline and COB wall-clock ≤ baseline | Load test vs pre-migration baseline ([§10](#10-testing-and-validation-strategy)) |
 | S4 | RPO ≤ 5 min, RTO ≤ 1 h in a DR game day (assumed targets) | DR test report |
@@ -188,7 +188,7 @@ Because tenants live in separate databases, the **cutover can be done tenant by 
 | Batch manager | ECS service `fineract-batch-manager`, **desired count 1**, deployment min 0% / max 100% | Quartz singleton; `FINERACT_NODE_ID` fixed; job API routed here |
 | Batch workers | ECS service `fineract-batch-worker` | Consumes COB partitions from MSK; scale on consumer-group lag; `FINERACT_LIQUIBASE_ENABLED=false` (as in `fineract-worker.env`) |
 | Schema migration | One-off ECS task with `SPRING_PROFILES_ACTIVE=liquibase-only` | Runs before each deploy; app services start with Liquibase disabled |
-| Load balancing | ALB with listener rules: `GET` → read TG; mutating verbs → write TG; `/fineract-provider/api/v1/jobs*` and `/scheduler*` → batch-manager TG | `server.forward-headers-strategy=framework` already honours `X-Forwarded-*` |
+| Load balancing | ALB listener rules, path rules evaluated before method rules: `/fineract-provider/api/v1/jobs*`, `/v1/scheduler*`, `/v1/loans/catch-up*` and `/v1/loans/is-catch-up-running*` → batch-manager TG (all four are batch-manager-only in `FineractInstanceModeApiFilter`, including the GET); then `GET` → read TG; mutating verbs → write TG. During tenant waves, a tenant-header rule in front of these sends unmigrated tenants to the source fleet ([§6.3](#63-tenant-store)) | `server.forward-headers-strategy=framework` already honours `X-Forwarded-*` |
 | TLS | ACM certificate on ALB; ALB → task re-encrypts to 8443 with a keystore loaded from Secrets Manager, or plain HTTP inside the VPC if policy allows (`FINERACT_SERVER_SSL_ENABLED=false`) | Removes dependence on the bundled `keystore.jks` |
 | Tenant store + tenant DBs | Aurora PostgreSQL cluster(s): writer + ≥1 reader per AZ | Option to shard large tenants onto dedicated clusters via `tenant_server_connections` |
 | Messaging | Amazon MSK (provisioned or Serverless), IAM auth, topics `job-topic`, `external-events` | Configuration already proven in `kafka-client-msk.env`; set replicas to 3 |
@@ -225,7 +225,7 @@ AWS Organizations / Control Tower landing zone with separate accounts: `shared-s
 
 ### 6.1 Principles
 
-* **Tenant is the unit of migration.** Each tenant DB is migrated, validated and cut over independently; the tenant store is updated last per tenant.
+* **Tenant is the unit of migration.** Each tenant DB is migrated, validated and cut over independently; adding the tenant to the AWS tenant store and flipping its routing is the last step per tenant.
 * **Liquibase owns the schema.** Target schemas are created by Fineract's own Liquibase (`liquibase-only` task) at the *same changelog version* as the source, not by DMS. DMS moves data only.
 * **COB is the clock.** Cutover happens after a completed COB for that tenant and before the next business date starts.
 
@@ -236,16 +236,29 @@ AWS Organizations / Control Tower landing zone with separate accounts: `shared-s
 3. **Full load + CDC:** AWS DMS task (MariaDB binlog → Aurora PostgreSQL), table mappings generated from the Liquibase schema; LOB mode set for document/blob columns; sequences reset after full load.
 4. **Dialect audit of tenant-stored SQL:** extract every `stretchy_report` and data-table definition, run them against the Aurora copy, fix MariaDB-only syntax (`IFNULL`, `GROUP_CONCAT`, backtick identifiers, `LIMIT x,y`, date functions).
 5. **Reconcile** while CDC is running ([§6.6](#66-reconciliation-the-financial-acceptance-test)).
-6. **Cutover window:** freeze writes for the tenant (put write instances in read-only mode for that tenant or block at ALB/WAF by `Fineract-Platform-TenantId` header), wait for CDC lag = 0, final reconciliation, update `tenant_server_connections` (host, read-only host, credentials via Secrets Manager), resume.
+6. **Cutover window:** freeze writes for the tenant (block mutating requests at ALB/WAF by the `Fineract-Platform-TenantId` header), wait for CDC lag = 0, final reconciliation, insert the tenant's row and a **new** `tenant_server_connections` row (Aurora host, read-only host, credentials via Secrets Manager) into the AWS tenant store, flip the tenant-header routing rule to the AWS fleet, resume.
 7. **Reverse CDC** (Aurora → source) kept running for the rollback window.
 
 ### 6.3 Tenant store
 
-Migrated once, early, as part of the pilot. Thereafter its rows are updated per tenant wave. Tenant passwords in `tenant_server_connections` are encrypted with the master password (`fineract.tenant.master-password`, `AES/CBC/PKCS5Padding`); the master password moves to Secrets Manager and is **rotated** at the end of the programme.
+The AWS fleet cannot serve a tenant that is still on MariaDB: `DataSourcePerTenantServiceFactory.createNewDataSourceFor` builds every tenant pool with the JDBC protocol and driver of the tenant-store datasource, so one fleet only talks to one database engine. During the waves there are therefore **two fleets and two tenant stores**:
+
+* the **source fleet** keeps the source (MariaDB) tenant store and serves every tenant not yet migrated;
+* the **AWS fleet** gets its own Aurora PostgreSQL tenant store, created empty in the pilot, and a tenant row is added only when that tenant cuts over;
+* the edge routes by the `Fineract-Platform-TenantId` header: an ALB rule per migrated tenant (or one rule with a list of values) to the AWS target groups, default to the source fleet through an IP target group over Direct Connect/VPN (or the existing on-premises proxy, if the edge stays there until the last wave).
+
+The tenant-header routing switch is the cutover and the rollback for a tenant. Never edit a live `tenant_server_connections` row in place: `TomcatJdbcDataSourcePerTenantService` caches pools by connection id with no eviction, so running tasks would keep using the old database. Use a new row (new id), or do a rolling restart of every ECS service after the change ([A13](#7-application-changes-required)).
+
+Tenant passwords in `tenant_server_connections` are encrypted with the master password (`fineract.tenant.master-password`, `AES/CBC/PKCS5Padding`); the AWS tenant store uses its own master password from Secrets Manager, and the source one is retired with the source fleet.
 
 ### 6.4 Documents
 
-`aws s3 sync` from the filesystem store (`FINERACT_CONTENT_FILESYSTEM_ROOT_FOLDER`) to the S3 bucket preserving the key layout, followed by a checksum manifest comparison; delta sync at cutover.
+The filesystem store keeps files under `<FINERACT_CONTENT_FILESYSTEM_ROOT_FOLDER>/<tenant name>/` and stores each document's location **relative to that tenant folder** (`FileContentStoreService.getRootPath`), e.g. `documents/<entity>/<id>/<file>`. `S3ContentStoreService` uses the stored location verbatim as the S3 key, with no tenant prefix, so:
+
+* syncing the filesystem root as-is produces keys (`<tenant>/documents/...`) that downloads never request;
+* in one shared bucket, two tenants' `documents/clients/1/...` keys would collide.
+
+So the S3 store needs a tenant prefix first ([A12](#7-application-changes-required)): the S3 content store adds `<tenant identifier>/` to every key it reads, writes and deletes, and stored locations stay unchanged. Per tenant, `aws s3 sync <root>/<tenant name>/ s3://<bucket>/<tenant identifier>/`, then compare a checksum manifest and check that every `m_document` / `m_image` location resolves; delta sync at cutover.
 
 ### 6.5 Waves
 
@@ -290,6 +303,8 @@ The strategy deliberately keeps code changes small. Expected changes, each a sep
 | A9 | Optional (later): Quartz JDBC job store with clustering to remove the batch-manager singleton | Code |
 | A10 | Fix any dialect issues found by running the integration suite against Aurora PostgreSQL | Code (expected small) |
 | A11 | Fill `fineract-doc/.../deployment/aws.adoc` with the resulting deployment guide | Docs |
+| A12 | Prefix S3 content keys with the tenant identifier in `S3ContentStoreService` so tenants can share a bucket ([§6.4](#64-documents)) | Small code |
+| A13 | Optional: evict a tenant's cached pool in `TomcatJdbcDataSourcePerTenantService` when its connection row changes, so connection changes need no restart | Small code |
 
 ---
 
@@ -331,7 +346,7 @@ GitHub Actions authenticates to AWS with **OIDC** (no stored keys). Deployments 
 
 ### 9.1 Identity and access
 
-* One IAM task role per ECS service with least privilege (e.g. only the batch services can read/write the MSK job topic; only write can publish external events; only write can access the documents bucket).
+* One IAM task role per ECS service with least privilege (e.g. only the batch services can read/write the MSK job topic; only write can publish external events; documents bucket: write gets Get/Put/Delete on it, read gets `s3:GetObject` only because document and image downloads are GET requests served by `fineract-read`; batch services get report-export prefixes only).
 * IAM Identity Center for humans; break-glass roles audited.
 * Aurora: separate DB users for the app, DMS, read-only analysts; IAM auth where feasible.
 
@@ -385,7 +400,7 @@ COB resilience: because Quartz is in-memory and pinned to a node id, a batch-man
 |---|---|---|
 | 0. Mobilise & assess | 2 wks | Open decisions D1–D8 closed, baseline metrics captured |
 | 1. Landing zone & IaC | 3 wks | dev + test environments created from Terraform |
-| 2. Cloud-ready app (A1–A11) | 3 wks (parallel with 3) | App running in dev on Aurora/MSK/S3 |
+| 2. Cloud-ready app (A1–A13) | 3 wks (parallel with 3) | App running in dev on Aurora/MSK/S3 |
 | 3. CI/CD | 2 wks | Pipeline deploys by digest to dev/test |
 | 4. DB migration rehearsals | 4 wks | 3 clean rehearsals, zero reconciliation breaks |
 | 5. Perf, resilience, security | 3 wks | S3/S4 criteria met, pen test passed |
@@ -394,11 +409,11 @@ COB resilience: because Quartz is in-memory and pinned to a node id, a batch-man
 
 ### 11.2 Cutover runbook (per wave, outline)
 
-T-7d freeze non-essential changes · T-1d rehearsal reconciliation · T-0 after COB: block writes for wave tenants → CDC lag 0 → final reconciliation → switch `tenant_server_connections` → DNS/ALB routing for those tenants → smoke tests → unblock · T+1 COB on AWS, reconciliation of COB output · go/no-go to close rollback window.
+T-7d freeze non-essential changes · T-1d rehearsal reconciliation · T-0 after COB: block writes for wave tenants → CDC lag 0 → final reconciliation → add the tenants and new connection rows to the AWS tenant store → flip the ALB tenant-header rules to the AWS fleet → smoke tests → unblock · T+1 COB on AWS, reconciliation of COB output · go/no-go to close rollback window.
 
 ### 11.3 Rollback
 
-Per tenant, within the rollback window: block writes → reverse-CDC lag 0 → point `tenant_server_connections` back to the source → unblock. After the window closes (default: two successful COB cycles), rollback becomes a restore-from-backup exercise and is no longer a standard option.
+Per tenant, within the rollback window: block writes → reverse-CDC lag 0 → flip the tenant-header rule back to the source fleet (whose tenant store and pools still point at the source database) → unblock. After the window closes (default: two successful COB cycles), rollback becomes a restore-from-backup exercise and is no longer a standard option.
 
 ### 11.4 Decommission
 
