@@ -1,0 +1,40 @@
+%% Licensed to the Apache Software Foundation (ASF) under one
+%% or more contributor license agreements. See the NOTICE file
+%% distributed with this work for additional information
+%% regarding copyright ownership. The ASF licenses this file
+%% to you under the Apache License, Version 2.0 (the
+%% "License"); you may not use this file except in compliance
+%% with the License. You may obtain a copy of the License at
+%% http://www.apache.org/licenses/LICENSE-2.0
+%% Unless required by applicable law or agreed to in writing,
+%% software distributed under the License is distributed on an
+%% "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+%% KIND, either express or implied. See the License for the
+%% specific language governing permissions and limitations
+%% under the License.
+flowchart TB
+  subgraph PRE["Before cutover day"]
+    direction LR
+    A["T-7d<br/>Change freeze<br/>Rehearsal clean<br/>G1 readiness"] --> B["T-1d<br/>L1-L5 with CDC running<br/>Routing + alarms + reverse CDC ready<br/>G2 go / no-go"]
+  end
+  subgraph T0["Cutover night, per tenant"]
+    direction LR
+    C["After source COB<br/>No stuck jobs, no locked loans<br/>G3"] --> D["Write freeze<br/>at ALB / WAF"] --> E["Drain<br/>CDC lag = 0<br/>S3 delta + manifest"] --> F{"G4<br/>Final L1-L4<br/>zero breaks?"}
+    F -- "yes" --> G["Switch<br/>New tenant-store rows<br/>Flip tenant-header rule"] --> H{"G5<br/>Smoke per tenant<br/>green?"}
+    H -- "yes" --> I["Unfreeze<br/>Watch 60 min"]
+    F -- "no" --> X["Tenant stays on source"]
+    H -- "no" --> R["Roll back tenant<br/>before unfreeze"]
+  end
+  subgraph POST["Rollback window"]
+    direction LR
+    J{"G6<br/>T+1 COB on AWS<br/>L3/L4 clean?"} -- "yes" --> K{"G7<br/>T+2 COB<br/>L3/L4 + finance sign-off"}
+    K -- "yes" --> L["Close rollback window<br/>Stop reverse CDC"]
+    J -- "no" --> RB["Reverse CDC drain<br/>Flip back to source"]
+    K -- "no" --> RB
+  end
+  PRE --> T0
+  T0 --> POST
+  classDef stop fill:#fde8e8,stroke:#b42318,color:#4a0d0d;
+  classDef ok fill:#e7f6ec,stroke:#1a7f37,color:#0b3d1c;
+  class X,R,RB stop;
+  class L ok;

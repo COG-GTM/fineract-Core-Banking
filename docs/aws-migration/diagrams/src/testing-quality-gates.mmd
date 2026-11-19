@@ -1,0 +1,27 @@
+%% Licensed to the Apache Software Foundation (ASF) under one
+%% or more contributor license agreements. See the NOTICE file
+%% distributed with this work for additional information
+%% regarding copyright ownership. The ASF licenses this file
+%% to you under the Apache License, Version 2.0 (the
+%% "License"); you may not use this file except in compliance
+%% with the License. You may obtain a copy of the License at
+%% http://www.apache.org/licenses/LICENSE-2.0
+%% Unless required by applicable law or agreed to in writing,
+%% software distributed under the License is distributed on an
+%% "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+%% KIND, either express or implied. See the License for the
+%% specific language governing permissions and limitations
+%% under the License.
+flowchart LR
+  G0["Phase 0 gate<br/>Baseline captured<br/>Edge cases profiled<br/>Test data plan approved"] --> G1["Phase 1 gate<br/>IaC tests green<br/>test + perf built from Terraform<br/>Drift detection on"]
+  G1 --> G2["Phase 2 gate<br/>A1-A13 tests green<br/>Integration suite on Aurora<br/>Routing matrix green"]
+  G1 --> G3["Phase 3 gate<br/>One digest promoted<br/>Liquibase task + blue/green<br/>Deploy freeze tested"]
+  G2 --> G4["Phase 4 gate<br/>DMS type fidelity + CDC<br/>Reconciler mutation-tested<br/>3 clean rehearsals"]
+  G3 --> G4
+  G4 --> G5["Phase 5 gate<br/>Perf + COB at 1.5x peak<br/>FIS + DR game day<br/>Pen test + ops drills"]
+  G5 --> G6["Phase 6 gate per wave<br/>Wave rehearsal clean<br/>G1-G7 per tenant<br/>Zero reconciliation breaks"]
+  G6 --> G7["Phase 7 gate<br/>14 days SLOs met<br/>Daily L3/L4 clean<br/>Backups restorable"]
+  classDef gate fill:#e8f1fb,stroke:#1f5fa8,color:#0b2545;
+  classDef money fill:#fff4e0,stroke:#c77700,color:#3d2600;
+  class G0,G1,G2,G3,G5,G7 gate;
+  class G4,G6 money;
