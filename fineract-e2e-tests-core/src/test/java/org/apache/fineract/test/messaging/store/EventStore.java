@@ -55,8 +55,11 @@ public class EventStore {
     }
 
     public <R, T extends Event<R>> Optional<EventMessage<R>> findEventById(T type, Long id) {
-        List<EventMessage<R>> events = findByType(type);
-        return events.stream().filter(em -> type.getIdExtractor().apply(em.getData()).equals(id)).reduce((first, second) -> second);
+        return findEventsById(type, id).stream().reduce((first, second) -> second);
+    }
+
+    public <R, T extends Event<R>> List<EventMessage<R>> findEventsById(T type, Long id) {
+        return findByType(type).stream().filter(em -> type.getIdExtractor().apply(em.getData()).equals(id)).toList();
     }
 
     public <R, T extends Event<R>> List<EventMessage<R>> findByType(T type) {

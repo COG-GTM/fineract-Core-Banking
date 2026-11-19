@@ -24,6 +24,8 @@ import static org.awaitility.Awaitility.await;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import lombok.AccessLevel;
@@ -107,6 +109,43 @@ public class EventAssertion {
         }
         log.debug("Assert event: {}", eventMessage.getIdempotencyKey());
         return new EventAssertionBuilder<>(eventMessage);
+    }
+
+    /**
+     * Waits until an event with the given id arrives whose data passes the given assertions, then removes it from the
+     * store. Events are published asynchronously, so an event of the same type raised by an earlier command can arrive
+     * after the one under test; picking whichever arrived first would make the check timing dependent.
+     */
+    public <R, T extends Event<R>> void assertEventMatching(Class<T> eventClazz, Long id, Function<R, ?> dataAssertions) {
+        if (eventProperties.isEventVerificationDisabled()) {
+            return;
+        }
+        T event = eventFactory.create(eventClazz);
+        String notReceivedMessage = event.getEventName() + " hasn't been received within " + eventProperties.getWaitTimeoutInMillis() / 1000
+                + " seconds";
+        AtomicReference<EventMessage<R>> matchingEvent = new AtomicReference<>();
+        try {
+            await().atMost(Duration.ofMillis(eventProperties.getWaitTimeoutInMillis())).untilAsserted(() -> {
+                List<EventMessage<R>> candidates = eventStore.findEventsById(event, id);
+                Assertions.assertThat(candidates).as(notReceivedMessage).isNotEmpty();
+                AssertionError lastError = null;
+                for (int i = candidates.size() - 1; i >= 0; i--) {
+                    try {
+                        dataAssertions.apply(candidates.get(i).getData());
+                        matchingEvent.set(candidates.get(i));
+                        return;
+                    } catch (AssertionError e) {
+                        lastError = e;
+                    }
+                }
+                throw lastError;
+            });
+        } catch (ConditionTimeoutException e) {
+            String message = e.getCause() instanceof AssertionError ? e.getCause().getMessage() : notReceivedMessage;
+            throw new AssertionError(message, e);
+        }
+        eventStore.getReceivedEvents().remove(matchingEvent.get());
+        log.debug("Assert event: {}", matchingEvent.get().getIdempotencyKey());
     }
 
     public <R, T extends Event<R>> void assertEventNotRaised(Class<T> eventClazz, Predicate<? super EventMessage<R>> filter) {

@@ -21,6 +21,8 @@ package org.apache.fineract.test.initializer.suite;
 import static org.apache.fineract.client.feign.util.FeignCalls.executeVoid;
 import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.feign.FineractFeignClient;
@@ -38,6 +40,7 @@ public class JobSuiteInitializerStep implements FineractSuiteInitializerStep {
     public static final String EVERY_60_SECONDS = "0 0/1 * * * ?";
 
     private final FineractFeignClient fineractClient;
+    private final List<Long> deactivatedJobIds = new ArrayList<>();
 
     public JobSuiteInitializerStep(FineractFeignClient fineractClient) {
         log.debug("=== JobSuiteInitializerStep: Constructor called - bean is being created ===");
@@ -56,6 +59,10 @@ public class JobSuiteInitializerStep implements FineractSuiteInitializerStep {
         log.debug("=== Initializing Send Asynchronous Events job ===");
         Long jobId = updateExternalEventJobFrequency(EVERY_1_SECONDS);
         log.debug("=== Updated cron expression to EVERY_1_SECONDS ===");
+
+        // Starting the scheduler arms every active cron job, not only the event job. Daily jobs (accruals, interest
+        // recalculation, penalties, ...) would then fire at tenant midnight and change loans while a scenario runs.
+        deactivateCronJobsExcept(jobId);
 
         // CRITICAL: SchedulerGlobalInitializerStep stops the scheduler globally
         // Solution: START the scheduler so the job runs every 1 second automatically
@@ -118,7 +125,30 @@ public class JobSuiteInitializerStep implements FineractSuiteInitializerStep {
 
         // Reset cron expression to default
         updateExternalEventJobFrequency(EVERY_60_SECONDS);
+        reactivateJobs(deactivatedJobIds);
+        deactivatedJobIds.clear();
         log.debug("=== JobSuiteInitializerStep.resetAfterSuite() - COMPLETED ===");
+    }
+
+    private void deactivateCronJobsExcept(Long keptJobId) {
+        List<Long> jobIds = ok(() -> fineractClient.schedulerJob().retrieveAll8()).stream()
+                .filter(job -> Boolean.TRUE.equals(job.getActive()) && !keptJobId.equals(job.getJobId())).map(GetJobsResponse::getJobId)
+                .toList();
+        jobIds.forEach(id -> {
+            executeVoid(() -> fineractClient.schedulerJob().updateJobDetail(id, new PutJobsJobIDRequest().active(false)));
+            deactivatedJobIds.add(id);
+        });
+        log.debug("Deactivated {} cron jobs for the suite: {}", jobIds.size(), jobIds);
+    }
+
+    private void reactivateJobs(List<Long> jobIds) {
+        jobIds.forEach(id -> {
+            try {
+                executeVoid(() -> fineractClient.schedulerJob().updateJobDetail(id, new PutJobsJobIDRequest().active(true)));
+            } catch (Exception e) {
+                log.warn("Failed to reactivate job {}", id, e);
+            }
+        });
     }
 
     private Long updateExternalEventJobFrequency(String cronExpression) {
