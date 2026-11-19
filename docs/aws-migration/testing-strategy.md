@@ -210,7 +210,7 @@ The integration suite already passes on Docker PostgreSQL in CI. The migration a
 
 | Test | How | Pass criterion |
 |---|---|---|
-| Integration suite on Aurora | Run the five `test-core-*` shards and the sequential job against an Aurora PostgreSQL cluster in `test`, pointing `integration-tests` at a deployed Fineract with `-Dfineract.it.url=...` (supported by `FineractClientHelper`) or at the DB via `-PdbType=postgresql` from a runner inside the VPC | 100% pass, same skip list as CI |
+| Integration suite on Aurora | Run the five `test-core-*` shards and the sequential job against an Aurora PostgreSQL cluster in `test`, pointing `integration-tests` at a Fineract deployed in `test` on Aurora, from a runner inside the VPC. Both client paths must be redirected: `-Dfineract.it.url=...` for the generated client (`FineractClientHelper`) **and** the `BACKEND_PROTOCOL`, `BACKEND_HOST` and `BACKEND_PORT` environment variables read by `ConfigProperties.Backend` for the RestAssured tests (`Utils`). `-PdbType=postgresql` alone is not enough: the Cargo-launched server in `integration-tests/build.gradle` hardcodes `localhost:5432`, so either parameterise those JDBC/tenant properties or test the deployed service. Guard: the run fails if `/actuator/info` on the target does not report the `test` environment's image digest | 100% pass, same skip list as CI |
 | Engine version | Run the suite on the exact Aurora (or RDS) PostgreSQL major/minor chosen in D3 | 100% pass |
 | Liquibase from empty | `liquibase-only` profile against an empty Aurora tenant store and tenant DB (mirrors `liquibase-only-postgresql.yml`) | Completes; `DATABASECHANGELOG` head equals the build's head |
 | Liquibase upgrade path | Apply the **source production** Liquibase head to an empty Aurora DB, then upgrade to the release candidate (mirrors `verify-liquibase-backward-compatibility.yml`) | No failures; schema diff vs fresh install is empty |
@@ -261,7 +261,9 @@ The ALB rules in the strategy's [§5.1](README.md#51-service-mapping) are the mo
 
 How: each target group's tasks expose their instance mode (`/actuator/info` or a response header added at the ALB); the test sends each request and asserts the target. Also run the existing `InstanceModeIntegrationTest` and `LoanCOBCatchUpInstanceModeIntegrationTest` against the per-mode services to confirm `FineractInstanceModeApiFilter` rejects requests that reach the wrong mode.
 
-**Exit:** 100% of routing matrix rows pass in `test`, `perf` and `prod` (pre-wave).
+**Production safety:** in `prod` only the `GET` rows are executed. Mutating rows are proven in `test` and `perf`, and in `prod` by (a) an automated diff showing the production listener rules, priorities and conditions are identical to the tested ones (only hostnames/ARNs differ), and (b) the write-freeze row, sent before unfreeze to a designated test tenant, where the ALB/WAF rule rejects the request before it reaches Fineract. No probe may create, change or delete production data or trigger jobs.
+
+**Exit:** 100% of routing matrix rows pass in `test` and `perf`; in `prod` (pre-wave), all `GET` rows pass, the rule diff is clean and the write-freeze probe is rejected.
 
 ### 6.6 Multi-tenancy, tenant store and cache tests
 
@@ -391,7 +393,11 @@ This expands the strategy's [§6.6](README.md#66-reconciliation-the-financial-ac
 
 * Every level exits non-zero on any difference and writes a CSV of differing keys.
 * **Mutation test the reconciler**: before each rehearsal, corrupt one value in each financial table of a target copy (one cent, one date, one status, one deleted row, one extra row) and confirm the suite detects every corruption. A reconciler that misses a mutation cannot be used for a gate.
-* Source and target are compared at the **same consistent point**: during CDC, L1/L2 are run on quiesced chunks or with CDC paused; at T-0, after the write freeze and CDC lag = 0.
+* Source and target are compared at the **same consistent point**. Pausing CDC alone is not enough, because source writes continue while the target is frozen. Use one of:
+  * **Paired snapshot** (rehearsals, T-1): take a source replica snapshot at a recorded binlog position, let CDC apply up to exactly that position, stop the task, then compare the two static copies.
+  * **Closed ranges** (continuous checks during CDC): compare only key or date ranges that can no longer change (e.g. journal entries and transactions older than the last closed business date, verified unchanged by comparing the source range hash before and after the target read). Mutable tables (`m_loan`, `m_savings_account`, schedules) are compared only with a paired snapshot.
+  * **Write freeze** (T-0, authoritative): after the write freeze and CDC lag = 0, both sides are static.
+  A difference found with a closed-range check is re-checked on a paired snapshot before it is raised as a defect.
 * Results are stored per tenant, per run, with the data-set version and image digest.
 * Finance signs the L3 and L4 reports for each tenant before the rollback window closes.
 
@@ -527,12 +533,12 @@ The per-wave runbook of the strategy's [§11.2](README.md#112-cutover-runbook-pe
 | Time | Verification | Gate |
 |---|---|---|
 | T-7d | Change freeze for non-essential changes; latest rehearsal clean; go/no-go checklist ([Appendix D](#appendix-d-gono-go-checklist-per-wave)) pre-filled | G1 readiness |
-| T-1d | Reconciliation L1–L4 and L5 (COB diff on clones) with CDC running; routing matrix test on prod ALB; alarms and canaries green; rollback path (reverse CDC configuration) ready | G2 go/no-go to start |
+| T-1d | Reconciliation L1–L4 and L5 (COB diff on clones) with CDC running; read-only routing matrix rows and rule diff on prod ALB (§6.5); alarms and canaries green; rollback path (reverse CDC configuration) ready | G2 go/no-go to start |
 | T-0 after COB | Confirm COB completed on source for wave tenants; no stuck jobs; no loans locked (`m_loan_account_locks`) | G3 pre-freeze |
 | T-0 freeze | Write freeze for wave tenants at ALB/WAF; verify mutating requests are blocked and reads still served | — |
 | T-0 drain | CDC lag = 0; DMS validation no errors; final S3 delta sync and manifest diff | — |
 | T-0 reconcile | Final L1–L4 (and L6 on a sample) | G4 any break → that tenant does not cut over |
-| T-0 switch | Insert tenant + new connection rows in AWS tenant store; verify decryption and connectivity; flip tenant-header rules; routing matrix for wave tenants | — |
+| T-0 switch | Insert tenant + new connection rows in AWS tenant store; verify decryption and connectivity; flip tenant-header rules; read-only routing matrix rows for wave tenants | — |
 | T-0 smoke | Smoke catalogue ([Appendix A](#appendix-a-smoke-test-catalogue)) per tenant, read-only first; optional business-approved controlled transactions on designated test accounts | G5 unfreeze |
 | T-0 unfreeze | Unblock writes; watch error rate, latency, CDC reverse lag, DB connections for 60 min | — |
 | T+1 COB | COB on AWS; L3/L4 vs expected; compare COB journal output with an L5 prediction from the source clone | G6 |
@@ -691,7 +697,8 @@ Run per tenant after every deployment and at every cutover (G5). "RO" checks are
 | S10 | `GET /v1/jobs` routed to batch-manager; job list and schedules as expected | RO | 200; next fire times sensible |
 | S11 | Run one read-only stretchy report | RO | Same result as source |
 | S12 | Download one document and one image | RO | Hash matches manifest |
-| S13 | Routing matrix rows for this tenant (§6.5) | RO | All pass |
+| S13 | Routing matrix `GET` rows for this tenant (§6.5), incl. `GET /v1/jobs` and `GET /v1/loans/is-catch-up-running` → batch-manager | RO | All pass |
+| S13b | Full routing matrix incl. `POST/PUT/DELETE/PATCH`, catch-up and Batch API rows | RW (non-prod only) | All pass |
 | S14 | Create client → loan application → approve → disburse → repay → check journal entries | RW | Accounting entries correct; events published |
 | S15 | Savings deposit and withdrawal | RW | Balance and journal entries correct |
 | S16 | Idempotency: repeat a write with the same `Idempotency-Key` | RW | Second call returns the original result; no duplicate |
@@ -790,7 +797,7 @@ Each line is answered Yes with a link to evidence, or the wave does not proceed.
 4. T-1 reconciliation L1–L5 clean for every wave tenant.
 5. Tenant SQL audit 100% pass for every wave tenant.
 6. Document manifest diff empty for every wave tenant.
-7. Routing matrix test green on production ALB; write-freeze rule tested.
+7. Read-only routing matrix rows and rule diff green on production ALB; write-freeze rule tested (§6.5).
 8. Reverse CDC tasks configured and tested for every wave tenant.
 9. Production image digest equals the digest tested in `perf`; configuration diff report clean.
 10. Alarms, dashboards and canaries green; on-call staffed; war room open.
