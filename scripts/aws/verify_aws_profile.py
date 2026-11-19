@@ -26,6 +26,7 @@ Fails when:
   * a credential-like variable has a literal value in a task definition "environment" block
   * a "secrets" entry does not reference a ${SECRET_ARN_*} placeholder
   * a JVM debug agent (JDWP) is configured
+  * a web service serves HTTPS with the bundled keystore or allows any CORS origin
   * a service's FINERACT_MODE_* flags differ from its declared modes in services.json
   * a task definition uses a placeholder that is not documented in config/aws/README.md
 """
@@ -94,6 +95,12 @@ def main():
         for name in sorted(literal_credentials - secrets.keys()):
             if name in env or name.startswith(("FINERACT_HIKARI_", "FINERACT_DEFAULT_", "FINERACT_SERVER_SSL_")):
                 errors.append(f"{service}: {name} defaults to a literal in application.properties; supply it from Secrets Manager")
+
+        if spec["port"]:
+            if env.get("FINERACT_SERVER_SSL_ENABLED") == "true" and env.get("FINERACT_SERVER_SSL_KEY_STORE", "classpath:keystore.jks") == "classpath:keystore.jks":
+                errors.append(f"{service}: HTTPS needs a deployment keystore in FINERACT_SERVER_SSL_KEY_STORE, not the bundled classpath:keystore.jks")
+            if env.get("FINERACT_SECURITY_CORS_ENABLED", "true") == "true" and env.get("FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS", "*").strip() in ("", "*"):
+                errors.append(f"{service}: FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS must list explicit origins (default '*' allows credentialed requests from any origin)")
 
         if spec["modes"]:
             for mode, var in MODES.items():

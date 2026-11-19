@@ -19,16 +19,22 @@
 
 # Generates random credentials for the local docker compose stacks into the repository root .env file
 # (gitignored), which docker compose reads to interpolate ${LOCAL_*} references in config/docker/env/*.env.
-# Existing values are kept, so the script is safe to run repeatedly.
+# The script is safe to run repeatedly.
 set -euo pipefail
 
 ENV_FILE="${1:-$(cd "$(dirname "$0")/../.." && pwd)/.env}"
 touch "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 
+# Existing non-empty values are kept; missing or empty ones are (re)generated.
+if [[ -s "$ENV_FILE" && -n "$(tail -c 1 "$ENV_FILE")" ]]; then
+  echo >> "$ENV_FILE"
+fi
 for name in LOCAL_DB_PASSWORD LOCAL_DB_ROOT_PASSWORD LOCAL_TENANT_MASTER_PASSWORD; do
-  if ! grep -q "^${name}=" "$ENV_FILE"; then
-    echo "${name}=$(openssl rand -hex 24)" >> "$ENV_FILE"
-    echo "Generated ${name} in ${ENV_FILE}"
+  if grep -Eq "^${name}=.+" "$ENV_FILE"; then
+    continue
   fi
+  sed -i.bak "/^${name}=/d" "$ENV_FILE" && rm -f "$ENV_FILE.bak"
+  echo "${name}=$(openssl rand -hex 24)" >> "$ENV_FILE"
+  echo "Generated ${name} in ${ENV_FILE}"
 done

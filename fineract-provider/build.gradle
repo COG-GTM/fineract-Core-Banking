@@ -163,7 +163,8 @@ if (!(project.hasProperty('env') && project.getProperty('env') == 'dev')) {
 import groovy.sql.Sql
 
 project.ext.mysqlUser='root'
-project.ext.mysqlPassword='mysql'
+// -PmysqlPassword=... or LOCAL_DB_PASSWORD (config/docker/generate-local-secrets.sh) for the compose MariaDB/MySQL
+project.ext.mysqlPassword=findProperty('mysqlPassword') ?: System.getenv('LOCAL_DB_PASSWORD') ?: 'mysql'
 project.ext.pgUser='root'
 project.ext.pgPassword='postgres'
 

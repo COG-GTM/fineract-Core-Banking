@@ -87,6 +87,14 @@ class VerifyAwsProfileTest(unittest.TestCase):
         self.set_env("JAVA_TOOL_OPTIONS", "-agentlib:jdwp=transport=dt_socket,server=y,address=*:5000")
         self.assert_fails_with("enables a JVM debug agent")
 
+    def test_bundled_keystore_fails(self):
+        self.set_env("FINERACT_SERVER_SSL_KEY_STORE", "classpath:keystore.jks")
+        self.assert_fails_with("HTTPS needs a deployment keystore")
+
+    def test_wildcard_cors_fails(self):
+        self.set_env("FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS", "*")
+        self.assert_fails_with("FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS must list explicit origins")
+
     def test_unknown_fineract_variable_fails(self):
         self.set_env("FINERACT_HIKARI_PASWORD_TYPO", "x")
         self.assert_fails_with("FINERACT_HIKARI_PASWORD_TYPO is not read by any application*.properties")

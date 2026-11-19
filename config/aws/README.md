@@ -22,7 +22,8 @@ python3 scripts/aws/verify_aws_profile.py
 `verify_aws_profile.py` fails on: `FINERACT_*` names that no `application*.properties` reads, credentials that
 `application.properties` defaults to a literal but that are not sourced from Secrets Manager, literal credential
 values in `environment`, `secrets` entries that are not `${SECRET_ARN_*}` references, JVM debug agents (JDWP),
-service mode flags that do not match `services.json`, and placeholders missing from the table below.
+service mode flags that do not match `services.json`, HTTPS with the bundled keystore, wildcard CORS origins,
+and placeholders missing from the table below.
 
 ## Deploy-time placeholders
 
@@ -33,6 +34,8 @@ The deploy pipeline (Terraform outputs, A5) substitutes these, e.g. with `envsub
 | `ENVIRONMENT` | Environment name, e.g. `staging`, `prod`. |
 | `AWS_REGION` | Region of the stack. |
 | `IMAGE_URI` | ECR image URI pinned by digest. |
+| `SERVER_SSL_KEY_STORE` | Location of the deployment TLS keystore (e.g. `file:/opt/fineract/keystore.p12` baked into the image by the deploy pipeline); its password is `SECRET_ARN_KEYSTORE`. Not the bundled `classpath:keystore.jks`. |
+| `CORS_ALLOWED_ORIGIN_PATTERNS` | Comma-separated browser origins allowed to call the API (e.g. the web app URL); never `*`. |
 | `CPU_ARCHITECTURE` | `ARM64` or `X86_64`, matching the image. |
 | `ECS_EXECUTION_ROLE_ARN` | Execution role; needs `secretsmanager:GetSecretValue` on the secrets below and `kms:Decrypt` on their key. |
 | `TASK_ROLE_ARN_FINERACT_READ` | Task role for `fineract-read`. |

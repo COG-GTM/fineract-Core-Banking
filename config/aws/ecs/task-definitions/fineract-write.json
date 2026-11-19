@@ -163,8 +163,16 @@
           "value": "true"
         },
         {
+          "name": "FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS",
+          "value": "${CORS_ALLOWED_ORIGIN_PATTERNS}"
+        },
+        {
           "name": "FINERACT_SERVER_SSL_ENABLED",
           "value": "true"
+        },
+        {
+          "name": "FINERACT_SERVER_SSL_KEY_STORE",
+          "value": "${SERVER_SSL_KEY_STORE}"
         },
         {
           "name": "JAVA_TOOL_OPTIONS",
