@@ -1,0 +1,264 @@
+{
+  "family": "fineract-batch-worker-${ENVIRONMENT}",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "2048",
+  "memory": "4096",
+  "runtimePlatform": {
+    "operatingSystemFamily": "LINUX",
+    "cpuArchitecture": "${CPU_ARCHITECTURE}"
+  },
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${TASK_ROLE_ARN_FINERACT_BATCH_WORKER}",
+  "containerDefinitions": [
+    {
+      "name": "fineract-batch-worker",
+      "image": "${IMAGE_URI}",
+      "essential": true,
+      "environment": [
+        {
+          "name": "FINERACT_CONTENT_FILESYSTEM_ROOT_FOLDER",
+          "value": "/tmp"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_CONN_PARAMS",
+          "value": ""
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_DESCRIPTION",
+          "value": "Default Demo Tenant"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_HOSTNAME",
+          "value": "${AURORA_WRITER_ENDPOINT}"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_IDENTIFIER",
+          "value": "default"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_NAME",
+          "value": "fineract_default"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_PORT",
+          "value": "5432"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_RO_HOSTNAME",
+          "value": "${AURORA_READER_ENDPOINT}"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_RO_NAME",
+          "value": "fineract_default"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_RO_PORT",
+          "value": "5432"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_TIMEZONE",
+          "value": "Asia/Kolkata"
+        },
+        {
+          "name": "FINERACT_EXTERNAL_EVENTS_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "FINERACT_EXTERNAL_EVENTS_KAFKA_ADMIN_EXTRA_PROPERTIES",
+          "value": "security.protocol=SASL_SSL|sasl.mechanism=AWS_MSK_IAM|sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;|sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+        },
+        {
+          "name": "FINERACT_EXTERNAL_EVENTS_KAFKA_BOOTSTRAP_SERVERS",
+          "value": "${MSK_BOOTSTRAP_BROKERS}"
+        },
+        {
+          "name": "FINERACT_EXTERNAL_EVENTS_KAFKA_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "FINERACT_EXTERNAL_EVENTS_KAFKA_PRODUCER_EXTRA_PROPERTIES",
+          "value": "linger.ms=10|batch.size=16384|security.protocol=SASL_SSL|sasl.mechanism=AWS_MSK_IAM|sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;|sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+        },
+        {
+          "name": "FINERACT_EXTERNAL_EVENTS_KAFKA_TOPIC_NAME",
+          "value": "external-events"
+        },
+        {
+          "name": "FINERACT_EXTERNAL_EVENTS_KAFKA_TOPIC_REPLICAS",
+          "value": "3"
+        },
+        {
+          "name": "FINERACT_HIKARI_AUTO_COMMIT",
+          "value": "true"
+        },
+        {
+          "name": "FINERACT_HIKARI_CONNECTION_TIMEOUT",
+          "value": "20000"
+        },
+        {
+          "name": "FINERACT_HIKARI_DRIVER_SOURCE_CLASS_NAME",
+          "value": "org.postgresql.Driver"
+        },
+        {
+          "name": "FINERACT_HIKARI_IDLE_TIMEOUT",
+          "value": "60000"
+        },
+        {
+          "name": "FINERACT_HIKARI_JDBC_URL",
+          "value": "jdbc:postgresql://${AURORA_WRITER_ENDPOINT}:5432/fineract_tenants"
+        },
+        {
+          "name": "FINERACT_HIKARI_MAXIMUM_POOL_SIZE",
+          "value": "10"
+        },
+        {
+          "name": "FINERACT_HIKARI_MINIMUM_IDLE",
+          "value": "3"
+        },
+        {
+          "name": "FINERACT_HIKARI_TEST_QUERY",
+          "value": "SELECT 1"
+        },
+        {
+          "name": "FINERACT_INSECURE_HTTP_CLIENT",
+          "value": "false"
+        },
+        {
+          "name": "FINERACT_LIQUIBASE_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "FINERACT_MANAGEMENT_ENDPOINT_WEB_EXPOSURE_INCLUDE",
+          "value": "health,info,prometheus"
+        },
+        {
+          "name": "FINERACT_MANAGEMENT_METRICS_TAGS_APPLICATION",
+          "value": "fineract"
+        },
+        {
+          "name": "FINERACT_MODE_BATCH_MANAGER_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "FINERACT_MODE_BATCH_WORKER_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "FINERACT_MODE_READ_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "FINERACT_MODE_WRITE_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "FINERACT_NODE_ID",
+          "value": "2"
+        },
+        {
+          "name": "FINERACT_REMOTE_JOB_MESSAGE_HANDLER_JMS_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "FINERACT_REMOTE_JOB_MESSAGE_HANDLER_KAFKA_ADMIN_EXTRA_PROPERTIES",
+          "value": "security.protocol=SASL_SSL|sasl.mechanism=AWS_MSK_IAM|sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;|sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+        },
+        {
+          "name": "FINERACT_REMOTE_JOB_MESSAGE_HANDLER_KAFKA_BOOTSTRAP_SERVERS",
+          "value": "${MSK_BOOTSTRAP_BROKERS}"
+        },
+        {
+          "name": "FINERACT_REMOTE_JOB_MESSAGE_HANDLER_KAFKA_CONSUMER_EXTRA_PROPERTIES",
+          "value": "security.protocol=SASL_SSL|sasl.mechanism=AWS_MSK_IAM|sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;|sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+        },
+        {
+          "name": "FINERACT_REMOTE_JOB_MESSAGE_HANDLER_KAFKA_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "FINERACT_REMOTE_JOB_MESSAGE_HANDLER_KAFKA_PRODUCER_EXTRA_PROPERTIES",
+          "value": "security.protocol=SASL_SSL|sasl.mechanism=AWS_MSK_IAM|sasl.jaas.config=software.amazon.msk.auth.iam.IAMLoginModule required;|sasl.client.callback.handler.class=software.amazon.msk.auth.iam.IAMClientCallbackHandler"
+        },
+        {
+          "name": "FINERACT_REMOTE_JOB_MESSAGE_HANDLER_KAFKA_TOPIC_NAME",
+          "value": "job-topic"
+        },
+        {
+          "name": "FINERACT_REMOTE_JOB_MESSAGE_HANDLER_KAFKA_TOPIC_REPLICAS",
+          "value": "3"
+        },
+        {
+          "name": "FINERACT_REMOTE_JOB_MESSAGE_HANDLER_SPRING_EVENTS_ENABLED",
+          "value": "false"
+        },
+        {
+          "name": "FINERACT_SERVER_SSL_ENABLED",
+          "value": "true"
+        },
+        {
+          "name": "JAVA_TOOL_OPTIONS",
+          "value": "-XX:MaxRAMPercentage=75 -XX:+UseContainerSupport -XX:+UseStringDeduplication --add-exports=java.naming/com.sun.jndi.ldap=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-opens=java.base/java.security=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.management/javax.management=ALL-UNNAMED --add-opens=java.naming/javax.naming=ALL-UNNAMED"
+        },
+        {
+          "name": "OTEL_SERVICE_NAME",
+          "value": "fineract-batch-worker"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "FINERACT_DEFAULT_MASTER_PASSWORD",
+          "valueFrom": "${SECRET_ARN_TENANT_MASTER_PASSWORD}"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_MASTER_PASSWORD",
+          "valueFrom": "${SECRET_ARN_TENANT_MASTER_PASSWORD}"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_PWD",
+          "valueFrom": "${SECRET_ARN_DEFAULT_TENANT_DB}:password::"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_RO_PWD",
+          "valueFrom": "${SECRET_ARN_DEFAULT_TENANT_DB_RO}:password::"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_RO_UID",
+          "valueFrom": "${SECRET_ARN_DEFAULT_TENANT_DB_RO}:username::"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_UID",
+          "valueFrom": "${SECRET_ARN_DEFAULT_TENANT_DB}:username::"
+        },
+        {
+          "name": "FINERACT_HIKARI_PASSWORD",
+          "valueFrom": "${SECRET_ARN_TENANT_STORE_DB}:password::"
+        },
+        {
+          "name": "FINERACT_HIKARI_USERNAME",
+          "valueFrom": "${SECRET_ARN_TENANT_STORE_DB}:username::"
+        },
+        {
+          "name": "FINERACT_SERVER_SSL_KEY_STORE_PASSWORD",
+          "valueFrom": "${SECRET_ARN_KEYSTORE}:password::"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/fineract/${ENVIRONMENT}/fineract-batch-worker",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "fineract-batch-worker"
+        }
+      },
+      "portMappings": [
+        {
+          "containerPort": 8443,
+          "protocol": "tcp"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "fineract-read": {
+    "cpu": 2048,
+    "memory": 4096,
+    "port": 8443,
+    "modes": ["read"],
+    "envFiles": ["fineract-common.env", "fineract-aurora-postgresql.env", "fineract-read.env"]
+  },
+  "fineract-write": {
+    "cpu": 2048,
+    "memory": 4096,
+    "port": 8443,
+    "modes": ["write"],
+    "envFiles": ["fineract-common.env", "fineract-aurora-postgresql.env", "kafka-external-events-msk.env", "fineract-write.env"]
+  },
+  "fineract-batch-manager": {
+    "cpu": 2048,
+    "memory": 4096,
+    "port": 8443,
+    "modes": ["batch-manager"],
+    "envFiles": ["fineract-common.env", "fineract-aurora-postgresql.env", "kafka-external-events-msk.env", "kafka-remote-job-msk.env", "fineract-batch-manager.env"]
+  },
+  "fineract-batch-worker": {
+    "cpu": 2048,
+    "memory": 4096,
+    "port": 8443,
+    "modes": ["batch-worker"],
+    "envFiles": ["fineract-common.env", "fineract-aurora-postgresql.env", "kafka-external-events-msk.env", "kafka-remote-job-msk.env", "fineract-batch-worker.env"]
+  },
+  "fineract-liquibase": {
+    "cpu": 1024,
+    "memory": 2048,
+    "port": null,
+    "modes": [],
+    "envFiles": ["fineract-common.env", "fineract-aurora-postgresql.env", "fineract-liquibase.env"]
+  }
+}
