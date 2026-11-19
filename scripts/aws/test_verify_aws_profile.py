@@ -95,6 +95,10 @@ class VerifyAwsProfileTest(unittest.TestCase):
         self.set_env("FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS", "*")
         self.assert_fails_with("FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS must list explicit origins")
 
+    def test_unverified_database_tls_fails(self):
+        self.set_env("FINERACT_DEFAULT_TENANTDB_CONN_PARAMS", "sslmode=prefer")
+        self.assert_fails_with("FINERACT_DEFAULT_TENANTDB_CONN_PARAMS must use sslmode=verify-full")
+
     def test_unknown_fineract_variable_fails(self):
         self.set_env("FINERACT_HIKARI_PASWORD_TYPO", "x")
         self.assert_fails_with("FINERACT_HIKARI_PASWORD_TYPO is not read by any application*.properties")

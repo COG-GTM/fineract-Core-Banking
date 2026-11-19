@@ -166,7 +166,8 @@ project.ext.mysqlUser='root'
 // -PmysqlPassword=... or LOCAL_DB_PASSWORD (config/docker/generate-local-secrets.sh) for the compose MariaDB/MySQL
 project.ext.mysqlPassword=findProperty('mysqlPassword') ?: System.getenv('LOCAL_DB_PASSWORD') ?: 'mysql'
 project.ext.pgUser='root'
-project.ext.pgPassword='postgres'
+// -PpgPassword=... or LOCAL_DB_ROOT_PASSWORD (config/docker/generate-local-secrets.sh) for the compose PostgreSQL
+project.ext.pgPassword=findProperty('pgPassword') ?: System.getenv('LOCAL_DB_ROOT_PASSWORD') ?: 'postgres'
 
 configurations {
     driver

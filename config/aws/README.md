@@ -22,7 +22,7 @@ python3 scripts/aws/verify_aws_profile.py
 `verify_aws_profile.py` fails on: `FINERACT_*` names that no `application*.properties` reads, credentials that
 `application.properties` defaults to a literal but that are not sourced from Secrets Manager, literal credential
 values in `environment`, `secrets` entries that are not `${SECRET_ARN_*}` references, JVM debug agents (JDWP),
-service mode flags that do not match `services.json`, HTTPS with the bundled keystore, wildcard CORS origins,
+service mode flags that do not match `services.json`, HTTPS with the bundled keystore, wildcard CORS origins, PostgreSQL connections without `sslmode=verify-full`,
 and placeholders missing from the table below.
 
 ## Deploy-time placeholders
@@ -45,6 +45,7 @@ The deploy pipeline (Terraform outputs, A5) substitutes these, e.g. with `envsub
 | `TASK_ROLE_ARN_FINERACT_LIQUIBASE` | Task role for the one-off `fineract-liquibase` migration task. |
 | `AURORA_WRITER_ENDPOINT` | Aurora PostgreSQL cluster writer endpoint. |
 | `AURORA_READER_ENDPOINT` | Aurora PostgreSQL cluster reader endpoint. |
+| `RDS_CA_BUNDLE_PATH` | Path of the [RDS CA bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html) in the image (e.g. `/opt/fineract/rds-global-bundle.pem`), used with `sslmode=verify-full`. |
 | `MSK_BOOTSTRAP_BROKERS` | MSK IAM bootstrap brokers (port 9098). |
 | `SECRET_ARN_TENANT_STORE_DB` | JSON secret `{username, password}` for the tenant store (`fineract_tenants`). |
 | `SECRET_ARN_DEFAULT_TENANT_DB` | JSON secret `{username, password}` for the default tenant database. |

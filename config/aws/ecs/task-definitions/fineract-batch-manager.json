@@ -24,7 +24,7 @@
         },
         {
           "name": "FINERACT_DEFAULT_TENANTDB_CONN_PARAMS",
-          "value": ""
+          "value": "sslmode=verify-full&sslrootcert=${RDS_CA_BUNDLE_PATH}"
         },
         {
           "name": "FINERACT_DEFAULT_TENANTDB_DESCRIPTION",
@@ -45,6 +45,10 @@
         {
           "name": "FINERACT_DEFAULT_TENANTDB_PORT",
           "value": "5432"
+        },
+        {
+          "name": "FINERACT_DEFAULT_TENANTDB_RO_CONN_PARAMS",
+          "value": "sslmode=verify-full&sslrootcert=${RDS_CA_BUNDLE_PATH}"
         },
         {
           "name": "FINERACT_DEFAULT_TENANTDB_RO_HOSTNAME",
@@ -108,7 +112,7 @@
         },
         {
           "name": "FINERACT_HIKARI_JDBC_URL",
-          "value": "jdbc:postgresql://${AURORA_WRITER_ENDPOINT}:5432/fineract_tenants"
+          "value": "jdbc:postgresql://${AURORA_WRITER_ENDPOINT}:5432/fineract_tenants?sslmode=verify-full&sslrootcert=${RDS_CA_BUNDLE_PATH}"
         },
         {
           "name": "FINERACT_HIKARI_MAXIMUM_POOL_SIZE",

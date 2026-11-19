@@ -27,6 +27,7 @@ Fails when:
   * a "secrets" entry does not reference a ${SECRET_ARN_*} placeholder
   * a JVM debug agent (JDWP) is configured
   * a web service serves HTTPS with the bundled keystore or allows any CORS origin
+  * a PostgreSQL connection does not verify the server identity (sslmode=verify-full)
   * a service's FINERACT_MODE_* flags differ from its declared modes in services.json
   * a task definition uses a placeholder that is not documented in config/aws/README.md
 """
@@ -101,6 +102,14 @@ def main():
                 errors.append(f"{service}: HTTPS needs a deployment keystore in FINERACT_SERVER_SSL_KEY_STORE, not the bundled classpath:keystore.jks")
             if env.get("FINERACT_SECURITY_CORS_ENABLED", "true") == "true" and env.get("FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS", "*").strip() in ("", "*"):
                 errors.append(f"{service}: FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS must list explicit origins (default '*' allows credentialed requests from any origin)")
+
+        if env.get("FINERACT_HIKARI_JDBC_URL", "").startswith("jdbc:postgresql:"):
+            tls_settings = ["FINERACT_HIKARI_JDBC_URL", "FINERACT_DEFAULT_TENANTDB_CONN_PARAMS"]
+            if env.get("FINERACT_DEFAULT_TENANTDB_RO_HOSTNAME"):
+                tls_settings.append("FINERACT_DEFAULT_TENANTDB_RO_CONN_PARAMS")
+            for name in tls_settings:
+                if "sslmode=verify-full" not in env.get(name, ""):
+                    errors.append(f"{service}: {name} must use sslmode=verify-full (verify the database server identity)")
 
         if spec["modes"]:
             for mode, var in MODES.items():
