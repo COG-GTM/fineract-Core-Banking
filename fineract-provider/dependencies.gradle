@@ -74,6 +74,7 @@ dependencies {
             'io.micrometer:micrometer-registry-prometheus',
             'io.micrometer:micrometer-registry-otlp',
             'io.micrometer:micrometer-registry-cloudwatch2',
+            'io.opentelemetry:opentelemetry-exporter-otlp',
 
             'io.awspring.cloud:spring-cloud-aws-starter',
 
@@ -132,6 +133,10 @@ dependencies {
     implementation ('org.apache.commons:commons-email') {
         exclude group: 'com.sun.mail', module: 'javax.mail'
         exclude group: 'javax.activation', module: 'activation'
+    }
+
+    implementation('io.micrometer:micrometer-tracing-bridge-otel') {
+        exclude group: 'aopalliance', module: 'aopalliance'
     }
 
     implementation('org.springframework.boot:spring-boot-starter-jersey') {
