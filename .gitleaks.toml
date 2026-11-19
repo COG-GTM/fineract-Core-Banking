@@ -1,0 +1,54 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+# Secret scanning configuration (gitleaks), used by .github/workflows/secret-scan.yml.
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "fineract-env-literal-credential"
+description = "Literal credential in a docker compose or ECS env file; use ${LOCAL_*} interpolation (config/docker/generate-local-secrets.sh) or config/aws/secrets.env"
+path = '''(^|/)config/(docker|aws)/.*\.env$'''
+regex = '''(?m)^\s*[A-Z0-9_]*(PASSWORD|_PWD|SECRET|ACCESS_KEY|TOKEN)[A-Z0-9_]*\s*=\s*["']?([^\s"'$#][^\s"'#]*)'''
+secretGroup = 2
+keywords = ["password", "pwd", "secret", "access_key", "token"]
+
+[[rules]]
+id = "fineract-jdwp-agent"
+description = "JVM debug agent outside config/docker/env/debug.env; remove it from shared env files and task definitions"
+path = '''(^|/)config/(docker|aws)/.*\.(env|json)$'''
+regex = '''(-agentlib:jdwp|-Xrunjdwp)\S*'''
+keywords = ["jdwp"]
+[rules.allowlist]
+paths = ['''(^|/)config/docker/env/debug\.env$''']
+
+# Documented sample values only (demo user mifos:password, example hashes, tokens and idempotency keys in docs);
+# never add real secrets here, rotate them instead.
+[allowlist]
+description = "Documentation sample values"
+regexTarget = "secret"
+regexes = [
+  '''^bWlmb3M6cGFzc3dvcmQ=$''',
+  '''^abda146d-68b5-48ca-b527-16d2b7c5daef$''',
+  '''^VLwGl7vOP/q275ZTku\+PNGWnGwW4mzzNHSNaO9Pr67WT5/NZMpBr9tGYYiYsqwL1eRew2jl7O3/N1EFbLlXhSA==$''',
+  '''^5jdQ3dNQXHPzCuBbZVdQZ2XnVlPc3l2l$''',
+  '''^cb0bb6e33fc540709d50a16eb2e555f9$''',
+  '''^abc3326b1bb376351c7baeb4175f5e0504e33aadf6a158474a6d71de1befae51$''',
+  '''^6a72a630795be86fe926ce540fc45b6b922fe5ba130f185fe806a26b5e5efcdd$''',
+]

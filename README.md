@@ -143,6 +143,11 @@ git clone https://github.com/apache/fineract.git --config core.autocrlf=input
 cd fineract
 gradlew :fineract-provider:jibDockerBuild -x test
 ```
+The compose files read database credentials from a gitignored `.env` file in the project root; generate random local values once
+(see [`config/aws/README.md`](config/aws/README.md) for the AWS profile, which uses Secrets Manager instead):
+```bash
+./config/docker/generate-local-secrets.sh
+```
 Install the Loki log driver and start:
 ```bash
 docker plugin install grafana/loki-docker-driver:latest \
@@ -150,6 +155,7 @@ docker plugin install grafana/loki-docker-driver:latest \
 docker compose -f docker-compose-development.yml up -d
 ```
 The Fineract (back-end) should be running at https://localhost:8443/fineract-provider/ now.
+`docker-compose-development.yml` also enables a JDWP debug agent on port 5000 via `config/docker/env/debug.env`; the other compose files and the shared env files do not.
 Wait for https://localhost:8443/fineract-provider/actuator/health to return `{"status":"UP"}`.
 You must go to https://localhost:8443 and remember to accept the self-signed SSL certificate of the API once in your browser.
 

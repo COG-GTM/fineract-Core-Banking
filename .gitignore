@@ -35,3 +35,5 @@ gradleExp/
 .java-version
 
 .windsurf/
+# Local docker compose secrets (config/docker/generate-local-secrets.sh)
+.env

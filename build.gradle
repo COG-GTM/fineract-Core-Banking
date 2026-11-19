@@ -307,6 +307,8 @@ allprojects  {
             '**/bin/**',
             '**/.git/**',
             '**/.gitignore',
+            // local docker compose credentials (config/docker/generate-local-secrets.sh), gitignored
+            '.env',
             '**/.openapi-generator-ignore',
             '**/.gitkeep',
             '**/*.iml',
