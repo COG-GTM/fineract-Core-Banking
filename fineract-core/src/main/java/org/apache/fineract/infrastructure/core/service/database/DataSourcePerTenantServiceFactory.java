@@ -56,8 +56,17 @@ public class DataSourcePerTenantServiceFactory {
     private final DatabasePasswordEncryptor databasePasswordEncryptor;
     private final Optional<MeterRegistry> meterRegistry;
 
-    @SuppressFBWarnings(value = "SLF4J_SIGN_ONLY_FORMAT")
     public DataSource createNewDataSourceFor(FineractPlatformTenant tenant, FineractPlatformTenantConnection tenantConnection) {
+        return createNewDataSourceFor(tenant, tenantConnection, 0);
+    }
+
+    /**
+     * Creates the data source of a tenant connection. A non-zero {@code generation} is appended to the pool name, so a
+     * pool that replaces another one for the same schema while the old one drains gets its own JMX name and metrics.
+     */
+    @SuppressFBWarnings(value = "SLF4J_SIGN_ONLY_FORMAT")
+    public DataSource createNewDataSourceFor(FineractPlatformTenant tenant, FineractPlatformTenantConnection tenantConnection,
+            long generation) {
         if (!databasePasswordEncryptor.isMasterPasswordHashValid(tenantConnection.getMasterPasswordHash())) {
             throw new IllegalArgumentException(
                     "Invalid master password on tenant connection %d.".formatted(tenantConnection.getConnectionId()));
@@ -86,7 +95,7 @@ public class DataSourcePerTenantServiceFactory {
         HikariConfig config = new HikariConfig();
         config.setReadOnly(fineractProperties.getMode().isReadOnlyMode());
         config.setJdbcUrl(jdbcUrl);
-        config.setPoolName(schemaName + "_pool");
+        config.setPoolName(generation == 0 ? schemaName + "_pool" : schemaName + "_pool_" + generation);
         config.setUsername(schemaUsername);
         config.setPassword(databasePasswordEncryptor.decrypt(schemaPassword));
         config.setMinimumIdle(getMinPoolSize(tenantConnection));
